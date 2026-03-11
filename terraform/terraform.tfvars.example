@@ -1,0 +1,15 @@
+project_name = "bedrock-agent"
+environment  = "dev"
+aws_region   = "ap-northeast-1"
+
+# 使用する Bedrock モデル（コスト重視なら haiku）
+bedrock_model_id = "anthropic.claude-3-haiku-20240307-v1:0"
+
+# SSM Parameter Store のパス（Slack トークンの保存先）
+slack_bot_token_ssm_path      = "/bedrock-agent/dev/slack-bot-token"
+slack_signing_secret_ssm_path = "/bedrock-agent/dev/slack-signing-secret"
+
+# Lambda 設定
+lambda_timeout     = 30
+lambda_memory_size = 256
+log_retention_days = 3
