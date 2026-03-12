@@ -8,9 +8,11 @@ Slack 連携は拡張オプションとして対応可能です。
 
 ## デモ画面（Streamlit Web UI）
 
-| FAQ ヒット | Bedrock（Claude）回答 |
+![Streamlit デモ画面](docs/screenshots/demo_streamlit.png)
+
+| Lambda コンソール | Lambda モニタリング |
 |---|---|
-| ![FAQ回答](docs/screenshots/demo_faq.png) | ![Bedrock回答](docs/screenshots/demo_bedrock.png) |
+| ![Lambda Console](docs/screenshots/lambda_console.png) | ![Lambda Monitoring](docs/screenshots/lambda_monitoring.png) |
 
 ---
 
