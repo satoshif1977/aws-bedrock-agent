@@ -111,12 +111,14 @@ resource "aws_lambda_function" "main" {
 
   environment {
     variables = {
-      BEDROCK_MODEL_ID             = var.bedrock_model_id
-      SLACK_BOT_TOKEN_SSM_PATH     = var.slack_bot_token_ssm_path
+      BEDROCK_MODEL_ID              = var.bedrock_model_id
+      SLACK_BOT_TOKEN_SSM_PATH      = var.slack_bot_token_ssm_path
       SLACK_SIGNING_SECRET_SSM_PATH = var.slack_signing_secret_ssm_path
-      LOG_LEVEL                    = "INFO"
+      LOG_LEVEL                     = "INFO"
+      SKIP_SLACK_VERIFICATION       = "true"
       # TODO: FAQ データのパス（S3 or SSM）を追加する
       # TODO: 本番では環境変数に機密情報を直接入れない（SSM 経由で取得）
+      # TODO: Slack 連携時は SKIP_SLACK_VERIFICATION を false に戻す
     }
   }
 
@@ -132,10 +134,20 @@ resource "aws_lambda_function_url" "main" {
   authorization_type = "NONE" # Slack からの Webhook を受け付けるため公開
 
   cors {
-    allow_origins = ["https://slack.com"]
-    allow_methods = ["POST"]
+    allow_origins = ["*"]
+    allow_methods = ["POST", "GET"]
+    allow_headers = ["content-type"]
   }
 
   # TODO: 本番では Slack の署名検証を Lambda 内で必ず実装する
   # TODO: IP 制限や WAF の追加を検討する
+}
+
+# ── Lambda Function URL への公開アクセス許可 ────────────────
+resource "aws_lambda_permission" "function_url_public" {
+  statement_id           = "AllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.main.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
 }

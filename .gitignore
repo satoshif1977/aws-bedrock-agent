@@ -9,3 +9,5 @@ lambda.zip
 __pycache__/
 *.pyc
 .env
+*.docx
+payload.json
