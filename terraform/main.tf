@@ -128,6 +128,84 @@ resource "aws_lambda_function" "main" {
   ]
 }
 
+
+# ── Bedrock Agent IAM ロール ────────────────────────────────
+resource "aws_iam_role" "bedrock_agent" {
+  name        = "${var.project_name}-${var.environment}-agent-role"
+  description = "IAM role for Bedrock Agent"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "bedrock.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "bedrock_agent_model" {
+  name = "${var.project_name}-${var.environment}-agent-model-policy"
+  role = aws_iam_role.bedrock_agent.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ]
+      Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+    }]
+  })
+}
+
+# ── Bedrock Agent ───────────────────────────────────────────
+resource "aws_bedrockagent_agent" "main" {
+  agent_name                  = "${var.project_name}-${var.environment}"
+  agent_resource_role_arn     = aws_iam_role.bedrock_agent.arn
+  foundation_model            = var.bedrock_model_id
+  instruction                 = var.agent_instruction
+  idle_session_ttl_in_seconds = 600
+}
+
+# ── Action Group ────────────────────────────────────────────
+resource "aws_bedrockagent_agent_action_group" "faq_search" {
+  agent_id          = aws_bedrockagent_agent.main.agent_id
+  agent_version     = "DRAFT"
+  action_group_name = "faq-search"
+  description       = "社内FAQを検索して回答を返すアクション"
+
+  action_group_executor {
+    lambda = aws_lambda_function.main.arn
+  }
+
+  function_schema {
+    member_functions {
+      functions {
+        name        = "search-faq"
+        description = "FAQを検索して回答を返す"
+        parameters {
+          map_block_key = "question"
+          type          = "string"
+          description   = "ユーザーの質問"
+          required      = true
+        }
+      }
+    }
+  }
+}
+
+# ── Bedrock Agent → Lambda 呼び出し権限 ────────────────────
+resource "aws_lambda_permission" "bedrock_agent" {
+  statement_id  = "AllowBedrockAgent"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.main.function_name
+  principal     = "bedrock.amazonaws.com"
+  source_arn    = "${aws_bedrockagent_agent.main.agent_arn}/*"
+}
+
 # ── Lambda Function URL（Slack Webhook の受け口） ───────────
 resource "aws_lambda_function_url" "main" {
   function_name      = aws_lambda_function.main.function_name

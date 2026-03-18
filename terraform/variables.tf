@@ -49,6 +49,21 @@ variable "log_retention_days" {
   # TODO: 本番では 30〜90 日に延長する
 }
 
+# ── Bedrock Agent 設定 ─────────────────────────────────────
+variable "agent_instruction" {
+  description = "Bedrock Agent への指示文"
+  type        = string
+  default     = <<-EOT
+    あなたは社内FAQ自動応答アシスタントです。
+    ユーザーからの質問に対して、以下の順番で回答してください。
+    1. 利用可能なツール（Action Group）を使って情報を検索する
+    2. 見つかった情報をもとに、簡潔・丁寧に回答する
+    3. 分からない場合は「担当部署にご確認ください」と伝える
+    回答は日本語で、簡潔にまとめてください。
+    個人情報や機密情報には触れないでください。
+  EOT
+}
+
 # ── Slack 設定 ─────────────────────────────────────────────
 variable "slack_bot_token_ssm_path" {
   description = "Slack Bot Token を保存した SSM Parameter Store のパス"
