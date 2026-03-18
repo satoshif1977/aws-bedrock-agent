@@ -1,95 +1,103 @@
 # aws-bedrock-agent
 
 社内FAQや業務問い合わせの一次対応を自動化する PoC です。
-Amazon Bedrock（Claude）と Lambda を使い、**Web UI（Streamlit）** からの質問に自動回答します。
-Slack 連携は拡張オプションとして対応可能です。
+**Amazon Bedrock Agent** と **Action Groups** を活用し、複数のツールを自律的に使い分けながら回答・記録まで自動化します。
 
 ---
 
-## デモ画面（Streamlit Web UI）
+## デモ画面
 
-![Streamlit デモ画面](docs/screenshots/demo_streamlit.png)
-
-| Lambda コンソール | Lambda モニタリング |
+| Streamlit Web UI | Action Groups 構成 |
 |---|---|
-| ![Lambda Console](docs/screenshots/lambda_console.png) | ![Lambda Monitoring](docs/screenshots/lambda_monitoring.png) |
+| ![Streamlit デモ画面](docs/screenshots/demo_streamlit.png) | ![Action Groups](docs/screenshots/demo_agent_action_groups.png) |
+
+**DynamoDB への自動記録（質問ログ）**
+
+![DynamoDB Records](docs/screenshots/demo_dynamodb_records.png)
+
+---
+
+## アーキテクチャ
+
+```
+ユーザー（ブラウザ）
+  ↓
+Streamlit Web UI（boto3）
+  ↓
+Amazon Bedrock Agent（Claude 3 Haiku）
+  ├── Action Group 1: faq-search
+  │     └── Lambda → FAQ キーワード検索 → DynamoDB に自動記録
+  └── Action Group 2: log-question
+        └── Lambda → DynamoDB に明示的に記録
+```
+
+### AWS 構成図
+
+```mermaid
+graph TD
+    A[ユーザー ブラウザ] -->|質問| B[Streamlit Web UI]
+    B -->|invoke_agent| C[Amazon Bedrock Agent]
+    C -->|自律判断| D[Action Group 1: faq-search]
+    C -->|自律判断| E[Action Group 2: log-question]
+    D --> F[Lambda: FAQ キーワード検索]
+    E --> F
+    F -->|回答| C
+    F -->|自動記録| G[(DynamoDB)]
+    C -->|回答| B
+    F --> H[CloudWatch Logs]
+```
 
 ---
 
 ## 想定する社内業務
 
 | 業務 | 現状の課題 | このシステムでの改善 |
-|-----|-----------|-------------------|
-| 社内FAQ問い合わせ | 担当者が毎回同じ質問に答える | 一次回答を自動化。担当者の工数削減 |
-| 新入社員のオンボーディング | ルールや手続きが分散していて探しにくい | Web UIで即座に回答 |
-| IT ヘルプデスク | 問い合わせが集中して対応が遅れる | よくある質問を自動解決 |
-
----
-
-## AWS 構成図
-
-```mermaid
-graph TD
-    A[ユーザー（ブラウザ）] -->|質問| B[Streamlit Web UI]
-    B -->|boto3 Invoke| C[AWS Lambda]
-    C --> D{FAQ キーワード検索}
-    D -->|ヒット| E[FAQ 回答を返す]
-    D -->|ミス| F[Amazon Bedrock Claude]
-    F -->|回答生成| G[回答を返す]
-    F -->|回答不能| H[エスカレーション文言]
-    C --> I[CloudWatch Logs]
-    C --> J[SSM Parameter Store]
-```
-
----
-
-## フロントエンド構成
-
-| フロントエンド | 状態 | 用途 |
 |---|---|---|
-| **Streamlit Web UI** | **実装済み（メイン）** | デモ・PoC・社内共有 |
-| Slack ボット | 拡張オプション | 社内ツール・ヘルプデスク |
+| 社内FAQ問い合わせ | 担当者が毎回同じ質問に答える | 一次回答を自動化・担当者の工数削減 |
+| 新入社員のオンボーディング | ルールや手続きが分散して探しにくい | Web UI で即座に回答 |
+| IT ヘルプデスク | 問い合わせが集中して対応が遅れる | よくある質問を自動解決・ログで傾向分析 |
 
 ---
 
-## 処理フロー
+## 技術的なポイント（面談・副業アピール）
+
+### Bedrock Agent の自律判断
+LLM が「どのツールを使うか」を自律的に判断します。固定ロジックではなく、Agent が状況に応じて Action Group を選択します。
+
+### Lambda 内での原子的処理
+FAQ 検索と同時に DynamoDB への記録も Lambda 内で完結させる設計にしています。小さいモデル（Claude 3 Haiku）では複数ツールの連続呼び出しが不安定なケースがあるため、**信頼性を優先して Lambda 側で処理を完結**させています。
+
+### IaC による再現性
+Bedrock Agent・Action Groups・DynamoDB・Lambda・IAM をすべて Terraform で管理。コマンド一発で同じ環境を再現できます。
+
+---
+
+## プロジェクト構成
 
 ```
-ユーザーが Web UI に質問を入力
-  │
-  ▼
-Streamlit（boto3）→ Lambda を直接 Invoke
-  │
-  ├─ FAQ キーワード検索（ローカル辞書）
-  │     ヒット → FAQ 回答を返す
-  │
-  ├─ Bedrock（Claude 3 Haiku）に問い合わせ
-  │     成功 → AI 回答を返す
-  │
-  └─ フォールバック → エスカレーション文言
+aws-bedrock-agent/
+├── app/
+│   ├── app.py              # Streamlit Web UI（Bedrock Agent Runtime 呼び出し）
+│   └── requirements.txt
+├── lambda/
+│   └── index.py            # Action Group ハンドラー（FAQ検索 + DynamoDB記録）
+├── terraform/
+│   ├── main.tf             # Bedrock Agent / Action Groups / Lambda / DynamoDB / IAM
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── provider.tf
+│   └── terraform.tfvars.example
+├── docs/
+│   ├── architecture.drawio
+│   └── screenshots/
+└── README.md
 ```
 
 ---
 
 ## セットアップ手順
 
-### 1. SSM Parameter Store にトークンを保存
-
-```bash
-aws ssm put-parameter \
-  --name "/bedrock-agent/dev/slack-bot-token" \
-  --value "xoxb-xxxxxxxxxxxx" \
-  --type SecureString
-
-aws ssm put-parameter \
-  --name "/bedrock-agent/dev/slack-signing-secret" \
-  --value "xxxxxxxxxxxxxxxx" \
-  --type SecureString
-```
-
-> Web UI のみで使う場合はダミー値（`xoxb-dummy` / `dummy-secret`）で OK
-
-### 2. Terraform でデプロイ
+### 1. Terraform でデプロイ
 
 ```bash
 cd terraform
@@ -98,7 +106,15 @@ terraform plan
 terraform apply
 ```
 
-### 3. Streamlit Web UI を起動
+デプロイ後、以下が出力されます：
+
+```
+bedrock_agent_id    = "XXXXXXXXXX"
+dynamodb_table_name = "bedrock-agent-dev-questions"
+lambda_function_name = "bedrock-agent-dev"
+```
+
+### 2. Streamlit Web UI を起動
 
 ```bash
 cd app
@@ -110,61 +126,50 @@ aws-vault exec <profile> -- streamlit run app.py
 
 ---
 
-## プロジェクト構成
+## FAQ キーワード一覧
 
-```
-aws-bedrock-agent/
-├── app/
-│   ├── app.py              # Streamlit Web UI（メインフロントエンド）
-│   └── requirements.txt
-├── lambda/
-│   └── index.py            # Lambda 関数（FAQ検索 + Bedrock呼び出し）
-├── terraform/
-│   ├── main.tf             # Lambda / IAM / Function URL / CloudWatch
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── provider.tf
-│   └── terraform.tfvars.example
-├── docs/
-│   ├── architecture.drawio
-│   ├── architecture.drawio.png
-│   └── screenshots/        # デモ画面スクショ
-└── README.md
-```
-
----
-
-## セキュリティ上の注意点
-
-| 項目 | 対応状況 | TODO |
-|-----|---------|------|
-| トークン管理 | SSM Parameter Store（SecureString） | ローテーション設定を追加 |
-| IAM 最小権限 | Bedrock・SSM のみ許可 | モデル ARN を特定のものに絞る |
-| Slack 署名検証 | 実装済み（Web UI使用時はスキップ） | Slack 連携時に有効化 |
-| ログの個人情報 | 質問の先頭50文字のみ記録 | 本番では更に制限する |
+| キーワード | 回答内容 |
+|---|---|
+| 有給 | 有給休暇の申請方法（社内ポータル・3営業日前） |
+| 経費 | 経費精算の締め日・提出先 |
+| リモート | リモートワークのルール（週3日・事前報告） |
+| パスワード | IT ヘルプデスクへの連絡方法 |
+| 福利厚生 | 社内ポータルの参照先 |
 
 ---
 
 ## 推定コスト（月額）
 
-| リソース | 単価 | 月間想定 | 小計 |
-|---------|------|---------|------|
-| Lambda | $0.0000002/リクエスト | 1,000回 | ~$0.01 |
-| Bedrock Claude 3 Haiku | $0.00025/1K input tokens | 1,000回×200tokens | ~$0.05 |
-| CloudWatch Logs | $0.76/GB | 最小 | ~$0.01 |
-| **合計** | | | **~$0.10/月** |
+| リソース | 月間想定 | 小計 |
+|---|---|---|
+| Bedrock Agent 呼び出し | 1,000回 | ~$1.00 |
+| Lambda | 1,000回 | ~$0.01 |
+| DynamoDB（オンデマンド） | 最小 | ~$0.01 |
+| CloudWatch Logs | 最小 | ~$0.01 |
+| **合計** | | **~$1〜3/月** |
+
+---
+
+## セキュリティ上の注意点
+
+| 項目 | 対応状況 |
+|---|---|
+| IAM 最小権限 | Lambda・Bedrock Agent それぞれに専用ロールを付与 |
+| DynamoDB アクセス制御 | Lambda ロールに PutItem/GetItem のみ許可 |
+| ログの個人情報 | 質問の先頭50文字のみログ出力 |
+| Bedrock Agent 権限 | 特定モデル ARN に限定したポリシーを適用 |
 
 ---
 
 ## 今後の拡張ポイント
 
 | 拡張項目 | 内容 |
-|---------|------|
-| RAG 連携 | Bedrock Knowledge Bases で社内ドキュメントを検索 |
+|---|---|
+| Knowledge Base 連携 | Bedrock Knowledge Bases で社内ドキュメントを RAG 検索 |
 | Slack 連携 | Webhook 受け口を追加するだけで対応可能 |
-| FAQ 管理 | DynamoDB で FAQ を管理・更新 |
-| 回答ログ | DynamoDB に保存して未回答パターンを分析 |
-| 認証追加 | Cognito で Web UI にログイン機能を追加 |
+| AgentCore Policy | ツール呼び出しに細粒度アクセス制御を追加 |
+| 未回答分析 | DynamoDB のログから未回答パターンを可視化 |
+| Cognito 認証 | Web UI にログイン機能を追加 |
 
 ---
 
@@ -173,10 +178,6 @@ aws-bedrock-agent/
 ```bash
 cd terraform
 terraform destroy
-
-# SSM パラメータは手動削除
-aws ssm delete-parameter --name "/bedrock-agent/dev/slack-bot-token"
-aws ssm delete-parameter --name "/bedrock-agent/dev/slack-signing-secret"
 ```
 
 ---
