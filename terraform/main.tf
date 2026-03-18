@@ -116,6 +116,7 @@ resource "aws_lambda_function" "main" {
       SLACK_SIGNING_SECRET_SSM_PATH = var.slack_signing_secret_ssm_path
       LOG_LEVEL                     = "INFO"
       SKIP_SLACK_VERIFICATION       = "true"
+      DYNAMODB_TABLE                = var.dynamodb_table_name
       # TODO: FAQ データのパス（S3 or SSM）を追加する
       # TODO: 本番では環境変数に機密情報を直接入れない（SSM 経由で取得）
       # TODO: Slack 連携時は SKIP_SLACK_VERIFICATION を false に戻す
@@ -128,6 +129,42 @@ resource "aws_lambda_function" "main" {
   ]
 }
 
+
+# ── DynamoDB テーブル（質問ログ） ──────────────────────────
+resource "aws_dynamodb_table" "question_log" {
+  name         = var.dynamodb_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "question_id"
+
+  attribute {
+    name = "question_id"
+    type = "S"
+  }
+
+  tags = {
+    Name = var.dynamodb_table_name
+  }
+}
+
+# DynamoDB 書き込み権限（Lambda ロールに追加）
+resource "aws_iam_role_policy" "dynamodb" {
+  name = "${var.project_name}-${var.environment}-dynamodb-policy"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      Resource = aws_dynamodb_table.question_log.arn
+    }]
+  })
+}
 
 # ── Bedrock Agent IAM ロール ────────────────────────────────
 resource "aws_iam_role" "bedrock_agent" {
@@ -197,13 +234,48 @@ resource "aws_bedrockagent_agent_action_group" "faq_search" {
   }
 }
 
+# ── Action Group 2：質問ログ記録 ───────────────────────────
+resource "aws_bedrockagent_agent_action_group" "log_question" {
+  agent_id          = aws_bedrockagent_agent.main.agent_id
+  agent_version     = "DRAFT"
+  action_group_name = "log-question"
+  description       = "質問と回答を DynamoDB に記録するアクション"
+
+  action_group_executor {
+    lambda = aws_lambda_function.main.arn
+  }
+
+  function_schema {
+    member_functions {
+      functions {
+        name        = "log-question"
+        description = "ユーザーの質問と回答内容を DynamoDB に記録する"
+        parameters {
+          map_block_key = "question"
+          type          = "string"
+          description   = "ユーザーの質問"
+          required      = true
+        }
+        parameters {
+          map_block_key = "answer"
+          type          = "string"
+          description   = "提供した回答"
+          required      = true
+        }
+      }
+    }
+  }
+
+  depends_on = [aws_bedrockagent_agent_action_group.faq_search]
+}
+
 # ── Bedrock Agent → Lambda 呼び出し権限 ────────────────────
 resource "aws_lambda_permission" "bedrock_agent" {
   statement_id  = "AllowBedrockAgent"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.main.function_name
   principal     = "bedrock.amazonaws.com"
-  source_arn    = "${aws_bedrockagent_agent.main.agent_arn}/*"
+  source_arn    = aws_bedrockagent_agent.main.agent_arn
 }
 
 # ── Lambda Function URL（Slack Webhook の受け口） ───────────

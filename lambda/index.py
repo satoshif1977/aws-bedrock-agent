@@ -1,25 +1,28 @@
 """
 aws-bedrock-agent: Bedrock Agent Action Group ハンドラー
 
-処理フロー:
-  1. Bedrock Agent から Action Group の関数呼び出しを受信
-  2. parameters から question を取得
-  3. FAQ キーワード検索
-  4. 結果を Bedrock Agent の形式で返す
+Action Groups:
+  - faq-search  / search-faq    : FAQ キーワード検索
+  - log-question / log-question : 質問・回答を DynamoDB に記録
 """
 
 import logging
 import os
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 import boto3
+from botocore.exceptions import ClientError
 
 # ── ロガー設定 ─────────────────────────────────────────────
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
+# ── 定数 ──────────────────────────────────────────────────
+DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "bedrock-agent-dev-questions")
+
 # ── FAQ データ ─────────────────────────────────────────────
-# TODO: S3 または DynamoDB に移行してメンテナンス性を上げる
 FAQ_DATA = {
     "有給": "有給休暇の申請は社内ポータル > 勤怠管理から行えます。申請は取得日の3営業日前までにお願いします。",
     "経費": "経費精算は月末締めです。領収書と申請フォームを総務部に提出してください。",
@@ -31,20 +34,65 @@ FAQ_DATA = {
 
 # ── FAQ 検索 ───────────────────────────────────────────────
 def search_faq(question: str) -> str:
-    """キーワードマッチで FAQ を検索する"""
-    for keyword, answer in FAQ_DATA.items():
+    """キーワードマッチで FAQ を検索し、結果を DynamoDB に自動記録する"""
+    answer = "該当するFAQが見つかりませんでした。担当部署にご確認ください。"
+    for keyword, faq_answer in FAQ_DATA.items():
         if keyword in question:
             logger.info(f"FAQ ヒット: keyword={keyword}")
-            return answer
-    return "該当するFAQが見つかりませんでした。担当部署にご確認ください。"
+            answer = faq_answer
+            break
+
+    # FAQ 検索結果を自動記録
+    log_question(question, answer)
+    return answer
+
+
+# ── DynamoDB 記録 ──────────────────────────────────────────
+def log_question(question: str, answer: str) -> str:
+    """質問と回答を DynamoDB に記録する"""
+    dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+    table = dynamodb.Table(DYNAMODB_TABLE)
+
+    item = {
+        "question_id": str(uuid.uuid4()),
+        "question": question,
+        "answer": answer,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        table.put_item(Item=item)
+        logger.info(f"DynamoDB 記録完了: question_id={item['question_id']}")
+        return f"記録しました（ID: {item['question_id']}）"
+    except ClientError as e:
+        logger.error(f"DynamoDB 書き込みエラー: {e}")
+        return "記録に失敗しました。"
+
+
+# ── Action Group ルーター ──────────────────────────────────
+def route_function(function: str, parameters: list) -> str:
+    """function 名に応じて処理を振り分ける"""
+    params = {p["name"]: p.get("value", "") for p in parameters}
+
+    if function == "search-faq":
+        question = params.get("question", "")
+        logger.info(f"search-faq 呼び出し: question={question[:50]}")
+        return search_faq(question)
+
+    elif function == "log-question":
+        question = params.get("question", "")
+        answer = params.get("answer", "")
+        logger.info(f"log-question 呼び出し: question={question[:50]}")
+        return log_question(question, answer)
+
+    else:
+        logger.warning(f"未知の function: {function}")
+        return f"未対応の関数です: {function}"
 
 
 # ── Lambda ハンドラー（Bedrock Agent Action Group 形式） ────
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    Bedrock Agent Action Group のエントリーポイント。
-    Agent が search-faq 関数を呼び出す際にこのハンドラーが実行される。
-    """
+    """Bedrock Agent Action Group のエントリーポイント"""
     logger.info(f"Action Group 呼び出し: {event.get('actionGroup')} / {event.get('function')}")
 
     try:
@@ -53,15 +101,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         message_version = event.get("messageVersion", 1)
         parameters = event.get("parameters", [])
 
-        # パラメータから question を取得
-        question = ""
-        for param in parameters:
-            if param.get("name") == "question":
-                question = param.get("value", "")
-                break
-
-        logger.info(f"質問受信: {question[:50]}")
-        answer = search_faq(question)
+        answer = route_function(function, parameters)
 
         response = {
             "response": {

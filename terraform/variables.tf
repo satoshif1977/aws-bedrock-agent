@@ -49,17 +49,26 @@ variable "log_retention_days" {
   # TODO: 本番では 30〜90 日に延長する
 }
 
+# ── DynamoDB 設定 ──────────────────────────────────────────
+variable "dynamodb_table_name" {
+  description = "質問ログを保存する DynamoDB テーブル名"
+  type        = string
+  default     = "bedrock-agent-dev-questions"
+}
+
 # ── Bedrock Agent 設定 ─────────────────────────────────────
 variable "agent_instruction" {
   description = "Bedrock Agent への指示文"
   type        = string
   default     = <<-EOT
     あなたは社内FAQ自動応答アシスタントです。
-    ユーザーからの質問に対して、以下の順番で回答してください。
-    1. 利用可能なツール（Action Group）を使って情報を検索する
-    2. 見つかった情報をもとに、簡潔・丁寧に回答する
-    3. 分からない場合は「担当部署にご確認ください」と伝える
-    回答は日本語で、簡潔にまとめてください。
+    ユーザーからの質問に対して、必ず以下の順番で処理してください。
+
+    ステップ1: faq-search アクショングループの search-faq 関数を使って FAQ を検索し、回答を取得する。
+    ステップ2: 取得した回答をユーザーに日本語で簡潔に伝える。
+    ステップ3: 必ず log-question アクショングループの log-question 関数を使って、質問と回答を記録する。
+
+    記録は省略せず、必ず実行すること。
     個人情報や機密情報には触れないでください。
   EOT
 }

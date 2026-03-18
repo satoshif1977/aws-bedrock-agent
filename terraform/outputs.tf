@@ -13,6 +13,11 @@ output "lambda_log_group" {
   value       = aws_cloudwatch_log_group.lambda.name
 }
 
+output "dynamodb_table_name" {
+  description = "質問ログ DynamoDB テーブル名"
+  value       = aws_dynamodb_table.question_log.name
+}
+
 output "bedrock_agent_id" {
   description = "Bedrock Agent ID"
   value       = aws_bedrockagent_agent.main.agent_id
