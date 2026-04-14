@@ -47,6 +47,8 @@ graph TD
     F --> H[CloudWatch Logs]
 ```
 
+![アーキテクチャ構成図](docs/bedrock-agent-architecture.drawio.png)
+
 ---
 
 ## 想定する社内業務
