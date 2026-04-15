@@ -11,3 +11,6 @@ __pycache__/
 .env
 *.docx
 payload.json
+
+# draw.io バックアップ
+.*.bkp
