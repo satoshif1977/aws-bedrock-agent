@@ -9,7 +9,19 @@
 
 ---
 
-## デモ画面
+## デモ
+
+**有給申請の質問 → Bedrock Agent が即時回答**
+
+![有給申請デモ](docs/demo/有給申請.gif)
+
+**経費精算の質問 → Agent が FAQ を検索して回答**
+
+![経費精算デモ](docs/demo/経費精算.gif)
+
+---
+
+## スクリーンショット
 
 | Streamlit Web UI | Action Groups 構成 |
 |---|---|
