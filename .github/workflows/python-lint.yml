@@ -24,7 +24,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install tools
-        run: pip install ruff black pytest boto3
+        run: pip install ruff black pytest boto3 pytest-cov
 
       - name: ruff（構文チェック・未使用 import 検出）
         run: ruff check app/ lambda/
@@ -33,4 +33,11 @@ jobs:
         run: black --check app/ lambda/
 
       - name: pytest（Lambda ユニットテスト）
-        run: pytest lambda/test_index.py -v
+        run: pytest lambda/test_index.py -v --cov=lambda --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: lambda
+          fail_ci_if_error: false
