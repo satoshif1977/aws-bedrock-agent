@@ -33,16 +33,14 @@ with st.sidebar:
     )
     st.divider()
     st.markdown("### FAQ キーワード一覧")
-    st.markdown(
-        """
+    st.markdown("""
 以下のキーワードを含む質問は FAQ から即時回答します：
 - 有給
 - 経費
 - リモート
 - パスワード
 - 福利厚生
-"""
-    )
+""")
     st.divider()
     st.caption("aws-bedrock-agent PoC | Powered by Amazon Bedrock Agent")
 

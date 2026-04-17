@@ -93,7 +93,9 @@ def route_function(function: str, parameters: list) -> str:
 # ── Lambda ハンドラー（Bedrock Agent Action Group 形式） ────
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Bedrock Agent Action Group のエントリーポイント"""
-    logger.info(f"Action Group 呼び出し: {event.get('actionGroup')} / {event.get('function')}")
+    logger.info(
+        f"Action Group 呼び出し: {event.get('actionGroup')} / {event.get('function')}"
+    )
 
     try:
         action_group = event["actionGroup"]
@@ -107,9 +109,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "response": {
                 "actionGroup": action_group,
                 "function": function,
-                "functionResponse": {
-                    "responseBody": {"TEXT": {"body": answer}}
-                },
+                "functionResponse": {"responseBody": {"TEXT": {"body": answer}}},
             },
             "messageVersion": message_version,
         }
@@ -125,7 +125,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "function": event.get("function", ""),
                 "functionResponse": {
                     "responseBody": {
-                        "TEXT": {"body": "エラーが発生しました。担当部署にご確認ください。"}
+                        "TEXT": {
+                            "body": "エラーが発生しました。担当部署にご確認ください。"
+                        }
                     }
                 },
             },
