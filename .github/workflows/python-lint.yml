@@ -1,0 +1,33 @@
+name: Python Lint
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  lint:
+    name: ruff / black チェック
+    runs-on: ubuntu-latest
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install lint tools
+        run: pip install ruff black
+
+      - name: ruff（構文チェック・未使用 import 検出）
+        run: ruff check app/ lambda/
+
+      - name: black（フォーマットチェック）
+        run: black --check app/ lambda/

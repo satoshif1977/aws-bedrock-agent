@@ -3,7 +3,6 @@ aws-bedrock-agent: Streamlit Web UI
 Bedrock Agent Runtime を通じて Agent を呼び出すアプリ
 """
 
-import json
 import os
 import uuid
 
