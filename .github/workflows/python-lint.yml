@@ -1,4 +1,4 @@
-name: Python Lint
+name: Python Lint & Test
 
 on:
   push:
@@ -23,11 +23,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install lint tools
-        run: pip install ruff black
+      - name: Install tools
+        run: pip install ruff black pytest boto3
 
       - name: ruff（構文チェック・未使用 import 検出）
         run: ruff check app/ lambda/
 
       - name: black（フォーマットチェック）
         run: black --check app/ lambda/
+
+      - name: pytest（Lambda ユニットテスト）
+        run: pytest lambda/test_index.py -v
