@@ -43,10 +43,9 @@ variable "lambda_memory_size" {
 }
 
 variable "log_retention_days" {
-  description = "CloudWatch Logs の保持日数"
+  description = "CloudWatch Logs の保持日数（dev: 30, prod: 90 を推奨）"
   type        = number
-  default     = 3
-  # TODO: 本番では 30〜90 日に延長する
+  default     = 30
 }
 
 # ── DynamoDB 設定 ──────────────────────────────────────────
