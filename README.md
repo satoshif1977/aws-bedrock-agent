@@ -209,6 +209,45 @@ terraform destroy
 
 ---
 
+## CI / セキュリティスキャン
+
+GitHub Actions で Python リント（flake8）と Terraform の静的解析（Checkov）を自動実行しています。
+
+### 実施内容
+
+| ジョブ | 内容 |
+|---|---|
+| Python lint（flake8） | コードスタイル・構文エラーの検出 |
+| terraform fmt / validate | フォーマット・構文チェック |
+| Checkov セキュリティスキャン | IaC のセキュリティポリシー違反を検出（soft_fail: false） |
+
+### セキュリティ対応（Terraform で修正した内容）
+
+| リソース | 追加設定 |
+|---|---|
+| Lambda | `tracing_config { mode = "PassThrough" }`（X-Ray 有効化） |
+| DynamoDB | PITR（Point-in-Time Recovery）・`deletion_protection_enabled = true` |
+| IAM（Bedrock ポリシー） | `Resource = "*"` → 特定モデル ARN に限定 |
+| CloudWatch Logs | 保持期間のデフォルトを 30 日に設定 |
+
+### 意図的にスキップしている項目（PoC の合理的な省略）
+
+| チェック ID | 内容 | 理由 |
+|---|---|---|
+| CKV_AWS_117 | Lambda VPC 内配置 | Slack Webhook 受け口として公開構成が必要 |
+| CKV_AWS_272 | Lambda コード署名 | dev/PoC では不要 |
+| CKV_AWS_116 | Lambda DLQ 設定 | dev/PoC では不要 |
+| CKV_AWS_115 | Lambda 予約済み同時実行 | dev/PoC では不要 |
+| CKV_AWS_119 | DynamoDB KMS CMK | AWS 管理キーで十分 |
+| CKV_AWS_173 | Lambda 環境変数 KMS | dev/PoC では不要 |
+| CKV_AWS_158 | CloudWatch Logs KMS | dev/PoC では不要 |
+| CKV_AWS_338 | CloudWatch Logs 保持期間 1 年未満 | dev は 30 日で十分 |
+| CKV_AWS_290 / CKV_AWS_355 | Bedrock Agent CMK / Guardrails 未設定 | PoC のため省略 |
+| CKV_AWS_111 / CKV_AWS_356（インライン） | KMS Decrypt Resource `"*"` | SSM managed key ARN は apply 前に確定不可 |
+| Lambda URL AuthType NONE | Lambda Function URL 公開 | Slack Webhook 受け口として必要（署名検証は Lambda 内で実施） |
+
+---
+
 ## AI 活用について
 
 本プロジェクトは以下の Anthropic ツールを活用して開発しています。
