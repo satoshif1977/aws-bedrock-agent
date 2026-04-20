@@ -123,6 +123,10 @@ resource "aws_lambda_function" "main" {
     }
   }
 
+  tracing_config {
+    mode = "PassThrough"
+  }
+
   depends_on = [
     aws_iam_role_policy_attachment.lambda_basic,
     aws_cloudwatch_log_group.lambda
@@ -140,6 +144,12 @@ resource "aws_dynamodb_table" "question_log" {
     name = "question_id"
     type = "S"
   }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  deletion_protection_enabled = true
 
   tags = {
     Name = var.dynamodb_table_name

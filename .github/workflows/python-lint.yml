@@ -42,3 +42,22 @@ jobs:
           files: ./coverage.xml
           flags: lambda
           fail_ci_if_error: false
+
+  security:
+    name: Checkov セキュリティスキャン
+    runs-on: ubuntu-latest
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          soft_fail: true
+          output_format: cli
