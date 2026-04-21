@@ -21,11 +21,13 @@ with st.sidebar:
     st.header("設定")
     agent_id = st.text_input(
         "Bedrock Agent ID",
-        value=os.environ.get("BEDROCK_AGENT_ID", "VBIJQIUBUT"),
+        value=os.environ.get("BEDROCK_AGENT_ID", ""),
+        placeholder="例: VBIJQIUBUT",
     )
     agent_alias_id = st.text_input(
         "Agent Alias ID",
-        value=os.environ.get("BEDROCK_AGENT_ALIAS_ID", "TSTALIASID"),
+        value=os.environ.get("BEDROCK_AGENT_ALIAS_ID", ""),
+        placeholder="例: TSTALIASID",
     )
     aws_region = st.text_input(
         "AWS リージョン",
@@ -83,6 +85,10 @@ def invoke_bedrock_agent(question: str, session_id: str) -> str:
 
 
 # ── 質問入力 ──────────────────────────────────────────────────
+if not agent_id or not agent_alias_id:
+    st.info("サイドバーに Bedrock Agent ID と Agent Alias ID を入力してください。")
+    st.stop()
+
 if prompt := st.chat_input("質問を入力してください（例：有給の申請方法は？）"):
 
     # ユーザーメッセージを表示・保存
