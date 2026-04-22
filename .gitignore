@@ -14,3 +14,6 @@ payload.json
 
 # draw.io バックアップ
 .*.bkp
+
+# DOCX 抽出一時ファイル
+docx_extracted/
