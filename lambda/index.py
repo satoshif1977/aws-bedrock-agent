@@ -20,6 +20,8 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 # ── 定数 ──────────────────────────────────────────────────
+# AWS_REGION は Lambda 予約済み環境変数（AWS が自動でセット）
+REGION = os.environ.get("AWS_REGION", "ap-northeast-1")
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "bedrock-agent-dev-questions")
 
 # ── FAQ データ ─────────────────────────────────────────────
@@ -50,7 +52,7 @@ def search_faq(question: str) -> str:
 # ── DynamoDB 記録 ──────────────────────────────────────────
 def log_question(question: str, answer: str) -> str:
     """質問と回答を DynamoDB に記録する"""
-    dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+    dynamodb = boto3.resource("dynamodb", region_name=REGION)
     table = dynamodb.Table(DYNAMODB_TABLE)
 
     item = {
