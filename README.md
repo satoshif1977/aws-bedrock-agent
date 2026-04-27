@@ -1,7 +1,6 @@
 # aws-bedrock-agent
 
 ![CI](https://github.com/satoshif1977/aws-bedrock-agent/actions/workflows/python-lint.yml/badge.svg)
-[![codecov](https://codecov.io/gh/satoshif1977/aws-bedrock-agent/branch/master/graph/badge.svg)](https://codecov.io/gh/satoshif1977/aws-bedrock-agent)
 ![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![Terraform](https://img.shields.io/badge/Terraform-623CE4?style=flat&logo=terraform&logoColor=white)
@@ -210,6 +209,20 @@ aws-vault exec <profile> -- streamlit run app.py
 cd terraform
 terraform destroy
 ```
+
+---
+
+## 学習で気づいたこと・躓いたポイント
+
+### Bedrock Agent
+
+- **Agent エイリアスを作成しないと呼び出せない**: `invoke_agent` は Agent ID ではなく **Agent Alias ID** が必要。コンソールで Agent を作成しただけではエイリアスが存在しないため、必ずエイリアスを作成してから Terraform の outputs に反映する。
+- **Action Group の Lambda スキーマの厳密さ**: OpenAPI スキーマの `operationId` と Lambda の `apiPath` が一致していないと Agent がツールを認識しない。小さなスペル差異でサイレントに失敗するので注意。
+- **Claude 3 Haiku は複数ツールの連続呼び出しが不安定**: 大きいモデルなら Agent が複数ツールを順番に呼び出せるが、Haiku では途中で止まることがある。FAQ 検索と DynamoDB 記録を 1 つの Lambda にまとめて**信頼性を優先**した設計に変更して解決。
+
+### Terraform / DynamoDB
+
+- **DynamoDB クライアントのリージョン指定**: `boto3.client('dynamodb')` はデフォルトで `AWS_DEFAULT_REGION` 環境変数を参照するが、Lambda 環境では明示的に `region_name` を渡すか環境変数を設定する方が確実。ハードコードは避ける。
 
 ---
 
