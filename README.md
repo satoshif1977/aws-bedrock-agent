@@ -75,7 +75,7 @@ graph TD
 |---|---|
 | ![メインフロー](docs/bedrock-agent-design-overview.png) | ![サービス詳細](docs/bedrock-agent-design-details.png) |
 
-> Claude Design で生成したインフォグラフィック風の構成図。副業・面談資料としても活用可能。
+> Claude Design で生成したインフォグラフィック風の構成図。プレゼン・ポートフォリオ資料としても活用可能。
 
 ---
 
