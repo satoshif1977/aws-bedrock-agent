@@ -230,6 +230,49 @@ terraform destroy
 
 ---
 
+## トラブルシューティング
+
+| 症状 | 原因 | 対処法 |
+|---|---|---|
+| `ResourceNotFoundException: Agent alias` | Alias が未作成 | コンソールで Agent Alias を作成し、Alias ID を `terraform.tfvars` に設定する |
+| Action Group が呼び出されない | OpenAPI スキーマの `operationId` と Lambda のパスが不一致 | スキーマの `operationId` と `apiPath` が完全一致するか確認 |
+| Streamlit で `NoCredentialsError` | aws-vault を経由していない | `aws-vault exec <profile> -- streamlit run app.py` で起動する |
+| DynamoDB `AccessDeniedException` | Lambda IAM ロールに PutItem 権限がない | `terraform plan` で IAM ポリシーを確認・再 apply |
+| Bedrock から `ValidationException` | モデルアクセスが未許可 | AWS コンソール → Bedrock → モデルアクセスで Claude を有効化 |
+
+---
+
+## ローカル開発・テスト方法
+
+### Streamlit Web UI のローカル起動
+
+```bash
+cd app
+pip install -r requirements.txt
+aws-vault exec personal-dev-source -- streamlit run app.py
+# http://localhost:8501 でアクセス
+```
+
+### Lambda 関数の単体テスト（CLI）
+
+```bash
+# terraform apply 後に実行
+aws-vault exec personal-dev-source -- aws lambda invoke \
+  --function-name bedrock-agent-dev \
+  --payload '{"actionGroup":"faq-search","apiPath":"/search","httpMethod":"GET","parameters":[{"name":"query","type":"string","value":"有給"}]}' \
+  response.json
+cat response.json
+```
+
+### DynamoDB の質問ログ確認
+
+```bash
+aws-vault exec personal-dev-source -- aws dynamodb scan \
+  --table-name bedrock-agent-dev-questions
+```
+
+---
+
 ## CI / セキュリティスキャン
 
 GitHub Actions で Python リント（flake8）と Terraform の静的解析（Checkov）を自動実行しています。
