@@ -17,3 +17,7 @@ payload.json
 
 # DOCX 抽出一時ファイル
 docx_extracted/
+
+# Python cache
+.ruff_cache/
+.pytest_cache/
