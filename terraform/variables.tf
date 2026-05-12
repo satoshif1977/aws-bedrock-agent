@@ -20,9 +20,9 @@ variable "aws_region" {
 variable "bedrock_model_id" {
   description = "使用する Bedrock モデル ID"
   type        = string
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+  default     = "anthropic.claude-3-5-haiku-20241022-v1:0"
   # 候補:
-  #   anthropic.claude-3-haiku-20240307-v1:0   （高速・低コスト）
+  #   anthropic.claude-3-5-haiku-20241022-v1:0   （高速・低コスト）
   #   anthropic.claude-3-sonnet-20240229-v1:0  （バランス型）
   #   amazon.titan-text-lite-v1                （低コスト）
   # TODO: 本番では用途に応じてモデルを選定する
