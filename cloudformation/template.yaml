@@ -1,0 +1,361 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Bedrock Agent + Action Groups + Lambda + DynamoDB 構成。
+  aws-bedrock-agent の Terraform 版と同等の構成を CloudFormation で実装。
+  Terraform との最大の差異:
+    Terraform → Agent と ActionGroup が別リソース（aws_bedrockagent_agent_action_group）
+    CFn      → ActionGroups: を Agent リソース内にインライン定義（まとめて1リソース）
+
+# ── パラメータ ────────────────────────────────────────────────────────────
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: bedrock-agent
+    Description: プロジェクト名（リソース命名プレフィックス）
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: 環境名
+
+  BedrockModelId:
+    Type: String
+    Default: anthropic.claude-3-5-haiku-20241022-v1:0
+    Description: >
+      使用する Bedrock モデル ID。
+      候補: anthropic.claude-3-5-haiku-20241022-v1:0（高速・低コスト）
+           anthropic.claude-3-sonnet-20240229-v1:0（バランス型）
+
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    Description: Lambda タイムアウト秒数（Bedrock 応答時間に応じて調整）
+
+  LambdaMemorySize:
+    Type: Number
+    Default: 256
+    Description: Lambda メモリサイズ（MB）
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [7, 14, 30, 60, 90]
+    Description: CloudWatch Logs 保持日数（dev: 30 / prod: 90 推奨）
+
+  DynamoDBTableName:
+    Type: String
+    Default: bedrock-agent-dev-questions
+    Description: 質問ログを保存する DynamoDB テーブル名
+
+  SlackBotTokenSsmPath:
+    Type: String
+    Default: /bedrock-agent/dev/slack-bot-token
+    Description: Slack Bot Token を保存した SSM Parameter Store のパス（SecureString）
+
+  SlackSigningSecretSsmPath:
+    Type: String
+    Default: /bedrock-agent/dev/slack-signing-secret
+    Description: Slack Signing Secret を保存した SSM Parameter Store のパス（SecureString）
+
+  AgentInstruction:
+    Type: String
+    Default: >-
+      あなたは社内FAQ自動応答アシスタントです。
+      ユーザーからの質問に対して、必ず以下の順番で処理してください。
+      ステップ1: faq-search アクショングループの search-faq 関数を使って FAQ を検索し、回答を取得する。
+      ステップ2: 取得した回答をユーザーに日本語で簡潔に伝える。
+      ステップ3: 必ず log-question アクショングループの log-question 関数を使って、質問と回答を記録する。
+      記録は省略せず、必ず実行すること。個人情報や機密情報には触れないでください。
+    Description: Bedrock Agent への指示文（システムプロンプト）
+
+# ── リソース ─────────────────────────────────────────────────────────────
+Resources:
+
+  # ── 1. CloudWatch Logs（Lambda）──────────────────────────────────────
+  # Lambda より先に作成しないと Lambda が独自に作成してしまう
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-${Environment}"
+      RetentionInDays: !Ref LogRetentionDays
+
+  # ── 2. IAM ロール（Lambda 実行用）────────────────────────────────────
+  # Terraform 版: aws_iam_role.lambda + aws_iam_role_policy_attachment.lambda_basic
+  #               + aws_iam_role_policy.bedrock / ssm / dynamodb（3つの別リソース）
+  # CFn 版: Policies: リストで1リソースにまとめる
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-${Environment}-lambda-role"
+      Description: IAM role for Bedrock Agent Lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        # Bedrock 呼び出し権限
+        - PolicyName: !Sub "${ProjectName}-${Environment}-bedrock-policy"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}"
+        # SSM Parameter Store 読み取り権限（Slack トークン取得用）
+        - PolicyName: !Sub "${ProjectName}-${Environment}-ssm-policy"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SlackBotTokenSsmPath}"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SlackSigningSecretSsmPath}"
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                # checkov:skip=CKV_AWS_111: SSM マネージドキー ARN は事前確定不可のため * を使用
+                # checkov:skip=CKV_AWS_356: 同上
+                Resource: "*"
+        # DynamoDB 書き込み権限
+        - PolicyName: !Sub "${ProjectName}-${Environment}-dynamodb-policy"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt QuestionLogTable.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ── 3. Lambda 関数 ───────────────────────────────────────────────────
+  # NOTE: Code.ZipFile はインラインプレースホルダー。
+  #       実際のデプロイは S3 バケットに lambda.zip をアップロードして
+  #       Code: { S3Bucket: ..., S3Key: ... } で参照すること。
+  #       Terraform 版の data "archive_file" に相当する機能は CFn には存在しない。
+  MainFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaLogGroup
+    Properties:
+      FunctionName: !Sub "${ProjectName}-${Environment}"
+      Description: 社内FAQ自動応答 PoC - Bedrock + Slack 連携
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: index.handler
+      Runtime: python3.11
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      TracingConfig:
+        Mode: PassThrough  # dev: 無料。本番で監視が必要な場合のみ Active に変更
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          SLACK_BOT_TOKEN_SSM_PATH: !Ref SlackBotTokenSsmPath
+          SLACK_SIGNING_SECRET_SSM_PATH: !Ref SlackSigningSecretSsmPath
+          LOG_LEVEL: INFO
+          SKIP_SLACK_VERIFICATION: "true"
+          DYNAMODB_TABLE: !Ref DynamoDBTableName
+      Code:
+        # プレースホルダー（sam build や S3 アップロードで置き換える）
+        ZipFile: |
+          def handler(event, context):
+              return {"statusCode": 200, "body": "placeholder"}
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ── 4. Lambda Function URL（Slack Webhook の受け口）─────────────────
+  # Terraform 版: aws_lambda_function_url.main に相当
+  MainFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      AuthType: NONE  # Slack からの Webhook を受け付けるため公開
+      Cors:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - POST
+          - GET
+        AllowHeaders:
+          - content-type
+      TargetFunctionArn: !GetAtt MainFunction.Arn
+
+  # Function URL への公開アクセス許可
+  # Terraform 版: aws_lambda_permission.function_url_public に相当
+  FunctionUrlPublicPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !GetAtt MainFunction.Arn
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  # ── 5. DynamoDB テーブル（質問ログ）─────────────────────────────────
+  QuestionLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref DynamoDBTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: question_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: question_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      DeletionProtectionEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ── 6. IAM ロール（Bedrock Agent 実行用）────────────────────────────
+  # Terraform 版: aws_iam_role.bedrock_agent + aws_iam_role_policy.bedrock_agent_model
+  BedrockAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-${Environment}-agent-role"
+      Description: IAM role for Bedrock Agent
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${ProjectName}-${Environment}-agent-model-policy"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ── 7. Bedrock Agent（Action Groups をインライン定義）────────────────
+  # ★ Terraform との最大の差異 ★
+  # Terraform: aws_bedrockagent_agent + aws_bedrockagent_agent_action_group × 2（別リソース）
+  # CFn:       AWS::Bedrock::Agent の ActionGroups: プロパティにインライン定義（1リソース）
+  #
+  # AutoPrepare: true を設定すると Agent 作成後に自動で PREPARED 状態になる
+  # （Terraform では apply 後に手動 or aws cli で prepare が必要）
+  BedrockAgent:
+    Type: AWS::Bedrock::Agent
+    Properties:
+      AgentName: !Sub "${ProjectName}-${Environment}"
+      AgentResourceRoleArn: !GetAtt BedrockAgentRole.Arn
+      FoundationModel: !Ref BedrockModelId
+      Instruction: !Ref AgentInstruction
+      IdleSessionTTLInSeconds: 600
+      # AutoPrepare: Action Groups 変更後に自動で再 PREPARE する
+      # Terraform 版にはこの自動化がなく、変更のたびに手動 prepare が必要
+      AutoPrepare: true
+      ActionGroups:
+        # Action Group 1: FAQ 検索
+        # Terraform 版: aws_bedrockagent_agent_action_group.faq_search
+        - ActionGroupName: faq-search
+          Description: 社内FAQを検索して回答を返すアクション
+          ActionGroupExecutor:
+            Lambda: !GetAtt MainFunction.Arn
+          FunctionSchema:
+            Functions:
+              - Name: search-faq
+                Description: FAQを検索して回答を返す
+                Parameters:
+                  question:
+                    Type: string
+                    Description: ユーザーの質問
+                    Required: true
+        # Action Group 2: 質問ログ記録
+        # Terraform 版: aws_bedrockagent_agent_action_group.log_question
+        - ActionGroupName: log-question
+          Description: 質問と回答を DynamoDB に記録するアクション
+          ActionGroupExecutor:
+            Lambda: !GetAtt MainFunction.Arn
+          FunctionSchema:
+            Functions:
+              - Name: log-question
+                Description: ユーザーの質問と回答内容を DynamoDB に記録する
+                Parameters:
+                  question:
+                    Type: string
+                    Description: ユーザーの質問
+                    Required: true
+                  answer:
+                    Type: string
+                    Description: 提供した回答
+                    Required: true
+
+  # ── 8. Lambda Permission（Bedrock Agent → Lambda 呼び出し）──────────
+  # Terraform 版: aws_lambda_permission.bedrock_agent に相当
+  BedrockAgentLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      StatementId: AllowBedrockAgent
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt MainFunction.Arn
+      Principal: bedrock.amazonaws.com
+      SourceArn: !GetAtt BedrockAgent.AgentArn
+
+# ── 出力 ─────────────────────────────────────────────────────────────────
+Outputs:
+
+  BedrockAgentId:
+    Description: Bedrock Agent ID
+    Value: !GetAtt BedrockAgent.AgentId
+
+  BedrockAgentArn:
+    Description: Bedrock Agent ARN
+    Value: !GetAtt BedrockAgent.AgentArn
+
+  LambdaFunctionArn:
+    Description: Lambda 関数 ARN
+    Value: !GetAtt MainFunction.Arn
+
+  LambdaFunctionUrl:
+    Description: Lambda Function URL（Slack Webhook エンドポイント）
+    Value: !GetAtt MainFunctionUrl.FunctionUrl
+
+  DynamoDBTableName:
+    Description: DynamoDB テーブル名
+    Value: !Ref QuestionLogTable
+
+  AgentConsoleUrl:
+    Description: Bedrock Agent コンソール URL
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/bedrock/home#/agents/${BedrockAgent.AgentId}"
