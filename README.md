@@ -323,3 +323,7 @@ GitHub Actions で Python リント（flake8）と Terraform の静的解析（C
 | **カスタム Skills** | Terraform / Python / AWS に特化した Skills を設定・継続的に更新。自分の技術スタックに最適化したワークフローを構築 |
 
 > AI を「使う」だけでなく、自分の業務・技術スタックに合わせて**設定・運用・改善し続ける**ことを意識しています。
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting and security policies.
