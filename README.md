@@ -168,6 +168,75 @@ aws-vault exec <profile> -- streamlit run app.py
 
 ---
 
+## Action Group の追加方法
+
+既存の2つの Action Group に加え、新しいツールを Agent に追加する手順です。
+
+### 1. Lambda ハンドラーに新ルートを追加
+
+`lambda/index.py` の `routes` 辞書に追加します：
+
+```python
+# lambda/index.py
+routes = {
+    "search-faq":    _search_faq,
+    "log-question":  _log_question,
+    "check-status":  _check_status,   # ← 追加
+}
+```
+
+新しい関数 `_check_status()` を同ファイルに実装し、`return` 値は既存の `_search_faq` と同じ形式（`{"response": {"actionGroup": ..., "apiPath": ..., "responseBody": ...}}`）に合わせます。
+
+### 2. Terraform に Action Group ブロックを追加
+
+`terraform/main.tf` の `aws_bedrockagent_agent` リソースに追加します：
+
+```hcl
+action_group {
+  action_group_name = "check-status"
+  description       = "各種申請の処理状況を確認する"
+  action_group_executor {
+    lambda = aws_lambda_function.agent.arn
+  }
+  api_schema {
+    payload = jsonencode({
+      openapi = "3.0.0"
+      info    = { title = "check-status", version = "1.0.0" }
+      paths = {
+        "/check" = {
+          get = {
+            operationId = "checkStatus"
+            parameters  = [{ name = "type", in = "query", required = true, schema = { type = "string" } }]
+            responses   = { "200" = { description = "OK" } }
+          }
+        }
+      }
+    })
+  }
+}
+```
+
+### 3. 追加後の注意点
+
+| 注意点 | 詳細 |
+|---|---|
+| Agent の再 PREPARE | Action Group 変更後は Agent を PREPARE 状態にする必要あり（`auto_prepare = true` で自動化済み） |
+| `operationId` の一致 | OpenAPI スキーマの `operationId` と Lambda の `apiPath` が完全一致しないと Agent がツールを認識しない |
+| エイリアスの更新 | Action Group 変更後は Alias を再作成または更新しないと呼び出し元に反映されない |
+
+### Lambda の単体テスト（Action Group 追加後の確認）
+
+```bash
+# Action Group ハンドラーを直接 Invoke して動作確認
+aws-vault exec personal-dev-source -- aws lambda invoke \
+  --function-name bedrock-agent-dev \
+  --payload '{"actionGroup":"check-status","apiPath":"/check","httpMethod":"GET","parameters":[{"name":"type","type":"string","value":"有給"}]}' \
+  response.json
+cat response.json
+```
+
+---
+
 ## 推定コスト（月額）
 
 | リソース | 月間想定 | 小計 |
