@@ -116,7 +116,7 @@ resource "aws_lambda_function" "main" {
       LOG_LEVEL                     = "INFO"
       SKIP_SLACK_VERIFICATION       = "true"
       DYNAMODB_TABLE                = var.dynamodb_table_name
-      # TODO: FAQ データのパス（S3 or SSM）を追加する
+      FAQ_TABLE                     = aws_dynamodb_table.faq.name
       # TODO: 本番では環境変数に機密情報を直接入れない（SSM 経由で取得）
       # TODO: Slack 連携時は SKIP_SLACK_VERIFICATION を false に戻す
     }
@@ -132,6 +132,28 @@ resource "aws_lambda_function" "main" {
   ]
 }
 
+
+# ── DynamoDB テーブル（FAQ データ） ────────────────────────
+resource "aws_dynamodb_table" "faq" {
+  name         = "${var.project_name}-${var.environment}-faq"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "keyword"
+
+  attribute {
+    name = "keyword"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = false # dev/PoC では不要
+  }
+
+  deletion_protection_enabled = false # dev: スタック削除と同時に削除
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-faq"
+  }
+}
 
 # ── DynamoDB テーブル（質問ログ） ──────────────────────────
 resource "aws_dynamodb_table" "question_log" {
@@ -170,7 +192,10 @@ resource "aws_iam_role_policy" "dynamodb" {
         "dynamodb:Query",
         "dynamodb:Scan"
       ]
-      Resource = aws_dynamodb_table.question_log.arn
+      Resource = [
+        aws_dynamodb_table.question_log.arn,
+        aws_dynamodb_table.faq.arn,
+      ]
     }]
   })
 }

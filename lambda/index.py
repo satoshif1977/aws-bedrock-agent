@@ -23,26 +23,37 @@ logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 # AWS_REGION は Lambda 予約済み環境変数（AWS が自動でセット）
 REGION = os.environ.get("AWS_REGION", "ap-northeast-1")
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "bedrock-agent-dev-questions")
+FAQ_TABLE = os.environ.get("FAQ_TABLE", "bedrock-agent-dev-faq")
 
 # ── AWS クライアント（モジュールレベルでキャッシュ・コールドスタート最適化） ──
 _dynamodb = boto3.resource("dynamodb", region_name=REGION)
 _table = _dynamodb.Table(DYNAMODB_TABLE)
+_faq_table = _dynamodb.Table(FAQ_TABLE)
 
-# ── FAQ データ ─────────────────────────────────────────────
-FAQ_DATA = {
-    "有給": "有給休暇の申請は社内ポータル > 勤怠管理から行えます。申請は取得日の3営業日前までにお願いします。",
-    "経費": "経費精算は月末締めです。領収書と申請フォームを総務部に提出してください。",
-    "リモート": "リモートワークは週3日まで可能です。事前に上長への報告が必要です。",
-    "パスワード": "パスワードリセットは IT ヘルプデスク（内線: 1234）までご連絡ください。",
-    "福利厚生": "福利厚生の詳細は社内ポータル > 人事 > 福利厚生ページをご覧ください。",
-}
+# ── FAQ キャッシュ（ウォームスタート時は DynamoDB を省略） ──
+_FAQ_CACHE: Dict[str, str] | None = None
+
+
+def _load_faq() -> Dict[str, str]:
+    """DynamoDB から FAQ データを取得してキャッシュする（コールドスタート時のみ実行）"""
+    global _FAQ_CACHE
+    if _FAQ_CACHE is not None:
+        return _FAQ_CACHE
+    try:
+        response = _faq_table.scan()
+        _FAQ_CACHE = {item["keyword"]: item["answer"] for item in response.get("Items", [])}
+        logger.info(f"FAQ キャッシュ構築完了: {len(_FAQ_CACHE)} 件")
+    except ClientError as e:
+        logger.error(f"FAQ テーブル読み込みエラー: {e}")
+        _FAQ_CACHE = {}
+    return _FAQ_CACHE
 
 
 # ── FAQ 検索 ───────────────────────────────────────────────
 def search_faq(question: str) -> str:
     """キーワードマッチで FAQ を検索し、結果を DynamoDB に自動記録する"""
     answer = "該当するFAQが見つかりませんでした。担当部署にご確認ください。"
-    for keyword, faq_answer in FAQ_DATA.items():
+    for keyword, faq_answer in _load_faq().items():
         if keyword in question:
             logger.info(f"FAQ ヒット: keyword={keyword}")
             answer = faq_answer

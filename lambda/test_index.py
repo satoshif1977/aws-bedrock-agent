@@ -4,31 +4,59 @@ aws-bedrock-agent Lambda ユニットテスト
 DynamoDB 呼び出しをモックし、AWS 接続なしでビジネスロジックを検証する。
 """
 
+import pytest
 from unittest.mock import patch
 
+import index
 from index import handler, route_function, search_faq
+
+# ── テスト用 FAQ データ ────────────────────────────────────
+MOCK_FAQ = {
+    "有給": "有給休暇の申請は社内ポータル > 勤怠管理から行えます。申請は取得日の3営業日前までにお願いします。",
+    "経費": "経費精算は月末締めです。領収書と申請フォームを総務部に提出してください。",
+    "リモート": "リモートワークは週3日まで可能です。事前に上長への報告が必要です。",
+    "パスワード": "パスワードリセットは IT ヘルプデスク（内線: 1234）までご連絡ください。",
+    "福利厚生": "福利厚生の詳細は社内ポータル > 人事 > 福利厚生ページをご覧ください。",
+}
+
+
+@pytest.fixture(autouse=True)
+def reset_faq_cache():
+    """各テスト前後に _FAQ_CACHE をリセットしてテスト間の干渉を防ぐ"""
+    index._FAQ_CACHE = None
+    yield
+    index._FAQ_CACHE = None
 
 
 # ── search_faq テスト ─────────────────────────────────────
 class TestSearchFaq:
+    @patch("index._load_faq", return_value=MOCK_FAQ)
     @patch("index.log_question")
-    def test_有給キーワードでFAQが返る(self, mock_log):
+    def test_有給キーワードでFAQが返る(self, mock_log, mock_faq):
         result = search_faq("有給休暇を申請したい")
         assert "社内ポータル" in result
         assert "勤怠管理" in result
         mock_log.assert_called_once()
 
+    @patch("index._load_faq", return_value=MOCK_FAQ)
     @patch("index.log_question")
-    def test_経費キーワードでFAQが返る(self, mock_log):
+    def test_経費キーワードでFAQが返る(self, mock_log, mock_faq):
         result = search_faq("経費精算の方法を教えて")
         assert "月末締め" in result
         mock_log.assert_called_once()
 
+    @patch("index._load_faq", return_value=MOCK_FAQ)
     @patch("index.log_question")
-    def test_マッチしない場合はデフォルトメッセージ(self, mock_log):
+    def test_マッチしない場合はデフォルトメッセージ(self, mock_log, mock_faq):
         result = search_faq("全く関係ない質問")
         assert "該当するFAQが見つかりませんでした" in result
         mock_log.assert_called_once()
+
+    @patch("index._load_faq", return_value={})
+    @patch("index.log_question")
+    def test_FAQテーブルが空でもデフォルトメッセージを返す(self, mock_log, mock_faq):
+        result = search_faq("有給を申請したい")
+        assert "該当するFAQが見つかりませんでした" in result
 
 
 # ── route_function テスト ─────────────────────────────────
