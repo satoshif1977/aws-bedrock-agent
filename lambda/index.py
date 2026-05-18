@@ -74,23 +74,30 @@ def log_question(question: str, answer: str) -> str:
 
 # ── Action Group ルーター ──────────────────────────────────
 def route_function(function: str, parameters: list) -> str:
-    """function 名に応じて処理を振り分ける"""
+    """function 名に応じて処理を振り分ける（dict ルーティングテーブル方式）"""
     params = {p["name"]: p.get("value", "") for p in parameters}
 
-    if function == "search-faq":
+    def _search_faq() -> str:
         question = params.get("question", "")
         logger.info(f"search-faq 呼び出し: question={question[:50]}")
         return search_faq(question)
 
-    elif function == "log-question":
+    def _log_question() -> str:
         question = params.get("question", "")
         answer = params.get("answer", "")
         logger.info(f"log-question 呼び出し: question={question[:50]}")
         return log_question(question, answer)
 
-    else:
-        logger.warning(f"未知の function: {function}")
-        return f"未対応の関数です: {function}"
+    routes: Dict[str, Any] = {
+        "search-faq": _search_faq,
+        "log-question": _log_question,
+    }
+
+    handler = routes.get(function)
+    if handler:
+        return handler()
+    logger.warning(f"未知の function: {function}")
+    return f"未対応の関数です: {function}"
 
 
 # ── Lambda ハンドラー（Bedrock Agent Action Group 形式） ────
