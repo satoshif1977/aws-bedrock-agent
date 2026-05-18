@@ -24,6 +24,10 @@ logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 REGION = os.environ.get("AWS_REGION", "ap-northeast-1")
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "bedrock-agent-dev-questions")
 
+# ── AWS クライアント（モジュールレベルでキャッシュ・コールドスタート最適化） ──
+_dynamodb = boto3.resource("dynamodb", region_name=REGION)
+_table = _dynamodb.Table(DYNAMODB_TABLE)
+
 # ── FAQ データ ─────────────────────────────────────────────
 FAQ_DATA = {
     "有給": "有給休暇の申請は社内ポータル > 勤怠管理から行えます。申請は取得日の3営業日前までにお願いします。",
@@ -52,9 +56,6 @@ def search_faq(question: str) -> str:
 # ── DynamoDB 記録 ──────────────────────────────────────────
 def log_question(question: str, answer: str) -> str:
     """質問と回答を DynamoDB に記録する"""
-    dynamodb = boto3.resource("dynamodb", region_name=REGION)
-    table = dynamodb.Table(DYNAMODB_TABLE)
-
     item = {
         "question_id": str(uuid.uuid4()),
         "question": question,
@@ -63,7 +64,7 @@ def log_question(question: str, answer: str) -> str:
     }
 
     try:
-        table.put_item(Item=item)
+        _table.put_item(Item=item)
         logger.info(f"DynamoDB 記録完了: question_id={item['question_id']}")
         return f"記録しました（ID: {item['question_id']}）"
     except ClientError as e:
