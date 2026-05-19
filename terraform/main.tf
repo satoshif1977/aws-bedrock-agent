@@ -170,7 +170,7 @@ resource "aws_dynamodb_table" "question_log" {
     enabled = true
   }
 
-  deletion_protection_enabled = true
+  deletion_protection_enabled = false # dev: スタック削除と同時に削除
 
   tags = {
     Name = var.dynamodb_table_name
@@ -243,10 +243,11 @@ resource "aws_bedrockagent_agent" "main" {
 
 # ── Action Group ────────────────────────────────────────────
 resource "aws_bedrockagent_agent_action_group" "faq_search" {
-  agent_id          = aws_bedrockagent_agent.main.agent_id
-  agent_version     = "DRAFT"
-  action_group_name = "faq-search"
-  description       = "社内FAQを検索して回答を返すアクション"
+  agent_id           = aws_bedrockagent_agent.main.agent_id
+  agent_version      = "DRAFT"
+  action_group_name  = "faq-search"
+  action_group_state = "ENABLED"
+  description        = "社内FAQを検索して回答を返すアクション"
 
   action_group_executor {
     lambda = aws_lambda_function.main.arn
@@ -270,10 +271,11 @@ resource "aws_bedrockagent_agent_action_group" "faq_search" {
 
 # ── Action Group 2：質問ログ記録 ───────────────────────────
 resource "aws_bedrockagent_agent_action_group" "log_question" {
-  agent_id          = aws_bedrockagent_agent.main.agent_id
-  agent_version     = "DRAFT"
-  action_group_name = "log-question"
-  description       = "質問と回答を DynamoDB に記録するアクション"
+  agent_id           = aws_bedrockagent_agent.main.agent_id
+  agent_version      = "DRAFT"
+  action_group_name  = "log-question"
+  action_group_state = "ENABLED"
+  description        = "質問と回答を DynamoDB に記録するアクション"
 
   action_group_executor {
     lambda = aws_lambda_function.main.arn
