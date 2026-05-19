@@ -37,6 +37,22 @@
 
 ---
 
+### FAQ DynamoDB 外出し（v1.1.0 〜）
+
+FAQ データをコードから切り離し、DynamoDB テーブルで管理する構成に変更しました。Lambda はコールドスタート時に一度だけ Scan し、以降はモジュールレベルキャッシュで高速応答します。
+
+| DynamoDB テーブル一覧 | FAQ アイテム（5件） |
+|---|---|
+| ![DynamoDB テーブル](docs/screenshots/dynamodb_tables_faq_and_questions.png) | ![FAQ アイテム](docs/screenshots/dynamodb_faq_items.png) |
+
+| Lambda 環境変数（FAQ_TABLE） | CloudWatch Logs（キャッシュ構築ログ） |
+|---|---|
+| ![Lambda 環境変数](docs/screenshots/lambda_env_faq_table.png) | ![CloudWatch Logs](docs/screenshots/cloudwatch_logs_faq_cache.png) |
+
+> **ポイント**: FAQ の追加・変更はコードのデプロイ不要。DynamoDB のアイテムを更新するだけで即時反映されます（次回コールドスタート時に再読み込み）。
+
+---
+
 ## アーキテクチャ
 
 ```
@@ -117,6 +133,8 @@ aws-bedrock-agent/
 │   ├── outputs.tf
 │   ├── provider.tf
 │   └── terraform.tfvars.example
+├── scripts/
+│   └── seed_faq.py         # FAQ 初期データ投入スクリプト（terraform apply 後に1回実行）
 ├── docs/
 │   ├── architecture.drawio
 │   └── screenshots/
@@ -144,7 +162,15 @@ dynamodb_table_name = "bedrock-agent-dev-questions"
 lambda_function_name = "bedrock-agent-dev"
 ```
 
-### 2. Streamlit Web UI を起動
+### 2. FAQ データを DynamoDB に投入
+
+```bash
+# terraform apply 後に一度だけ実行
+aws-vault exec personal-dev-source -- python scripts/seed_faq.py
+# → FAQ キーワード 5件（有給・経費・リモート・パスワード・福利厚生）を登録
+```
+
+### 3. Streamlit Web UI を起動
 
 ```bash
 cd app
