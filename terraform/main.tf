@@ -134,8 +134,8 @@ resource "aws_lambda_function" "main" {
 
 
 # ── DynamoDB テーブル（FAQ データ） ────────────────────────
-# checkov:skip=CKV_AWS_28: dev/PoC 環境のため PITR 無効（本番では enabled = true に変更）
 resource "aws_dynamodb_table" "faq" {
+  #checkov:skip=CKV_AWS_28: dev/PoC 環境のため PITR 無効（本番では enabled = true に変更）
   name         = "${var.project_name}-${var.environment}-faq"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "keyword"

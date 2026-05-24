@@ -9,8 +9,8 @@ Action Groups:
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -31,10 +31,10 @@ _table = _dynamodb.Table(DYNAMODB_TABLE)
 _faq_table = _dynamodb.Table(FAQ_TABLE)
 
 # ── FAQ キャッシュ（ウォームスタート時は DynamoDB を省略） ──
-_FAQ_CACHE: Dict[str, str] | None = None
+_FAQ_CACHE: dict[str, str] | None = None
 
 
-def _load_faq() -> Dict[str, str]:
+def _load_faq() -> dict[str, str]:
     """DynamoDB から FAQ データを取得してキャッシュする（コールドスタート時のみ実行）"""
     global _FAQ_CACHE
     if _FAQ_CACHE is not None:
@@ -71,7 +71,7 @@ def log_question(question: str, answer: str) -> str:
         "question_id": str(uuid.uuid4()),
         "question": question,
         "answer": answer,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
     try:
@@ -99,7 +99,7 @@ def route_function(function: str, parameters: list) -> str:
         logger.info(f"log-question 呼び出し: question={question[:50]}")
         return log_question(question, answer)
 
-    routes: Dict[str, Any] = {
+    routes: dict[str, Any] = {
         "search-faq": _search_faq,
         "log-question": _log_question,
     }
@@ -112,7 +112,7 @@ def route_function(function: str, parameters: list) -> str:
 
 
 # ── Lambda ハンドラー（Bedrock Agent Action Group 形式） ────
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Bedrock Agent Action Group のエントリーポイント"""
     logger.info(
         f"Action Group 呼び出し: {event.get('actionGroup')} / {event.get('function')}"
