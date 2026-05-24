@@ -41,7 +41,9 @@ def _load_faq() -> dict[str, str]:
         return _FAQ_CACHE
     try:
         response = _faq_table.scan()
-        _FAQ_CACHE = {item["keyword"]: item["answer"] for item in response.get("Items", [])}
+        _FAQ_CACHE = {
+            item["keyword"]: item["answer"] for item in response.get("Items", [])
+        }
         logger.info(f"FAQ キャッシュ構築完了: {len(_FAQ_CACHE)} 件")
     except ClientError as e:
         logger.error(f"FAQ テーブル読み込みエラー: {e}")
