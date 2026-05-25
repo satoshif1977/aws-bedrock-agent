@@ -42,3 +42,18 @@ output "cloudwatch_logs_url" {
   description = "CloudWatch Logs コンソール URL"
   value       = "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#logsV2:log-groups/log-group/${replace(aws_cloudwatch_log_group.lambda.name, "/", "$252F")}"
 }
+
+output "bedrock_agent_alias_id" {
+  description = "Bedrock Agent Alias ID（InvokeAgent API 呼び出しに使用）"
+  value       = aws_bedrockagent_agent_alias.v1.agent_alias_id
+}
+
+output "bedrock_agent_alias_arn" {
+  description = "Bedrock Agent Alias ARN"
+  value       = aws_bedrockagent_agent_alias.v1.agent_alias_arn
+}
+
+output "bedrock_agent_alias_invoke_example" {
+  description = "boto3 で Agent を呼び出す際のサンプル（コピーして使用）"
+  value       = "aws bedrock-agent-runtime invoke-agent --agent-id ${aws_bedrockagent_agent.main.agent_id} --agent-alias-id ${aws_bedrockagent_agent_alias.v1.agent_alias_id} --session-id session-001 --input-text '質問をここに入力'"
+}

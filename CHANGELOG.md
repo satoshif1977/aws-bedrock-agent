@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-25
+
+### Added
+- **Bedrock Agent Alias 追加**（DRAFT/バージョン切り替え対応）
+  - `aws_bedrockagent_agent_alias.v1`：DRAFT を指向する安定版エイリアス
+  - 本番化時は `routing_configuration.agent_version` を数値バージョンに変更するだけで切り替え可能
+  - outputs: `bedrock_agent_alias_id` / `bedrock_agent_alias_arn` / `bedrock_agent_alias_invoke_example`
+  - InvokeAgent API サンプルコマンドを output に追加
+
 ## [1.2.0] - 2026-05-19
 
 ### Added

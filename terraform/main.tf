@@ -446,3 +446,23 @@ resource "aws_lambda_permission" "function_url_public" {
   principal              = "*"
   function_url_auth_type = "NONE"
 }
+
+# ── Bedrock Agent エイリアス ────────────────────────────────
+# エイリアスを使うことで「DRAFT（開発中）」と「v1（安定版）」を切り替えて
+# Runtime API（InvokeAgent）から呼び出せる。
+# 本番運用では: routing_configuration.agent_version を "1" 等に変更するだけで切り替え可能。
+resource "aws_bedrockagent_agent_alias" "v1" {
+  agent_id         = aws_bedrockagent_agent.main.agent_id
+  agent_alias_name = "${var.project_name}-${var.environment}-v1"
+  description      = "安定版エイリアス（DRAFT 指向。本番化時は agent_version を数値バージョンに変更する）"
+
+  routing_configuration {
+    agent_version = "DRAFT"
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "Terraform"
+  }
+}
