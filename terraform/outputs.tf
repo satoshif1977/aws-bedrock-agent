@@ -28,6 +28,16 @@ output "bedrock_agent_arn" {
   value       = aws_bedrockagent_agent.main.agent_arn
 }
 
+output "bedrock_guardrail_id" {
+  description = "Bedrock Guardrail ID"
+  value       = aws_bedrock_guardrail.main.guardrail_id
+}
+
+output "bedrock_guardrail_arn" {
+  description = "Bedrock Guardrail ARN"
+  value       = aws_bedrock_guardrail.main.guardrail_arn
+}
+
 output "cloudwatch_logs_url" {
   description = "CloudWatch Logs コンソール URL"
   value       = "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#logsV2:log-groups/log-group/${replace(aws_cloudwatch_log_group.lambda.name, "/", "$252F")}"

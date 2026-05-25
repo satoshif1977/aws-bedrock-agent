@@ -201,6 +201,102 @@ resource "aws_iam_role_policy" "dynamodb" {
   })
 }
 
+# ── Bedrock Guardrail ──────────────────────────────────────
+resource "aws_bedrock_guardrail" "main" {
+  name                      = "${var.project_name}-${var.environment}-guardrail"
+  description               = "社内FAQ ボット用ガードレール（コンテンツフィルター・PII マスキング・禁止トピック）"
+  blocked_input_messaging   = "申し訳ありません。その質問にはお答えできません。別の質問をお試しください。"
+  blocked_outputs_messaging = "申し訳ありません。その回答はお伝えできません。担当部署にご連絡ください。"
+
+  # ── コンテンツフィルター（有害コンテンツのブロック）──────
+  content_policy_config {
+    filters_config {
+      type            = "HATE"
+      input_strength  = "HIGH"
+      output_strength = "HIGH"
+    }
+    filters_config {
+      type            = "INSULTS"
+      input_strength  = "HIGH"
+      output_strength = "HIGH"
+    }
+    filters_config {
+      type            = "SEXUAL"
+      input_strength  = "HIGH"
+      output_strength = "HIGH"
+    }
+    filters_config {
+      type            = "VIOLENCE"
+      input_strength  = "HIGH"
+      output_strength = "HIGH"
+    }
+  }
+
+  # ── 禁止トピック（社内FAQボットに不適切な質問をブロック）──
+  topic_policy_config {
+    topics_config {
+      name       = "legal-advice"
+      type       = "DENY"
+      definition = "法的なアドバイス・訴訟・契約解釈に関する質問"
+      examples   = ["この契約は有効ですか", "訴訟を起こせますか", "法的責任はどうなりますか"]
+    }
+    topics_config {
+      name       = "salary-details"
+      type       = "DENY"
+      definition = "他の従業員の給与・賞与・評価に関する情報の開示要求"
+      examples   = ["〇〇さんの年収は", "給与テーブルを教えて", "誰が一番高い給与ですか"]
+    }
+    topics_config {
+      name       = "competitor-info"
+      type       = "DENY"
+      definition = "競合他社の内部情報・顧客情報・戦略に関する質問"
+      examples   = ["競合他社の価格は", "他社の顧客リストを見せて"]
+    }
+  }
+
+  # ── 機密情報マスキング（PII 自動検出・リダクション）────────
+  sensitive_information_policy_config {
+    pii_entities_config {
+      type   = "EMAIL"
+      action = "ANONYMIZE"
+    }
+    pii_entities_config {
+      type   = "PHONE"
+      action = "ANONYMIZE"
+    }
+    pii_entities_config {
+      type   = "NAME"
+      action = "ANONYMIZE"
+    }
+    pii_entities_config {
+      type   = "ADDRESS"
+      action = "ANONYMIZE"
+    }
+  }
+
+  # ── ワードフィルター（不適切語・機密キーワード）────────────
+  word_policy_config {
+    words_config {
+      text = "パスワード"
+    }
+    words_config {
+      text = "秘密鍵"
+    }
+    words_config {
+      text = "アクセスキー"
+    }
+    managed_word_lists_config {
+      type = "PROFANITY"
+    }
+  }
+}
+
+# ── Guardrail バージョン（Agent にはバージョンを指定する必要がある）──
+resource "aws_bedrock_guardrail_version" "main" {
+  guardrail_arn = aws_bedrock_guardrail.main.guardrail_arn
+  description   = "初期バージョン"
+}
+
 # ── Bedrock Agent IAM ロール ────────────────────────────────
 resource "aws_iam_role" "bedrock_agent" {
   name        = "${var.project_name}-${var.environment}-agent-role"
@@ -222,14 +318,21 @@ resource "aws_iam_role_policy" "bedrock_agent_model" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "bedrock:InvokeModel",
-        "bedrock:InvokeModelWithResponseStream"
-      ]
-      Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["bedrock:ApplyGuardrail"]
+        Resource = aws_bedrock_guardrail.main.guardrail_arn
+      }
+    ]
   })
 }
 
@@ -240,6 +343,11 @@ resource "aws_bedrockagent_agent" "main" {
   foundation_model            = var.bedrock_model_id
   instruction                 = var.agent_instruction
   idle_session_ttl_in_seconds = 600
+
+  guardrail_configuration {
+    guardrail_identifier = aws_bedrock_guardrail.main.guardrail_id
+    guardrail_version    = aws_bedrock_guardrail_version.main.version
+  }
 }
 
 # ── Action Group ────────────────────────────────────────────
