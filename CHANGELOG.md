@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-27
+
+### Changed
+
+- CI: `actions/setup-python` v5 → v6（Node.js 24 対応）
+- CI: `actions/checkout` v4 → v6（Node.js 24 対応）
+- CI: `codecov/codecov-action` v5 → v6
+- `app/requirements.txt`: `streamlit>=1.32.0` → `>=1.57.0`
+- `app/requirements.txt`: `boto3>=1.34.0` → `>=1.43.14`
+
+### Note
+
+- `hashicorp/aws ~> 5.0 → ~> 6.46`（PR#11）は major version のため保留中。v6 移行は動作確認後に適用予定。
+
 ## [1.3.0] - 2026-05-25
 
 ### Added
