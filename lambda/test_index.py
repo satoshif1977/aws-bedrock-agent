@@ -4,11 +4,12 @@ aws-bedrock-agent Lambda ユニットテスト
 DynamoDB 呼び出しをモックし、AWS 接続なしでビジネスロジックを検証する。
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import index
 import pytest
-from index import handler, route_function, search_faq
+from botocore.exceptions import ClientError
+from index import handler, log_question, route_function, search_faq
 
 # ── テスト用 FAQ データ ────────────────────────────────────
 MOCK_FAQ = {
@@ -106,3 +107,28 @@ class TestHandler:
         result = handler(event, None)
         body = result["response"]["functionResponse"]["responseBody"]["TEXT"]["body"]
         assert "エラー" in body
+
+
+# ── log_question テスト ───────────────────────────────────
+class TestLogQuestion:
+    @patch("index._table")
+    def test_正常系_DynamoDBに記録される(self, mock_table):
+        mock_table.put_item.return_value = {}
+        result = log_question("有給申請の方法は？", "社内ポータルから申請できます。")
+        assert "記録しました" in result
+        mock_table.put_item.assert_called_once()
+        # put_item に渡されたアイテムの構造を検証
+        call_args = mock_table.put_item.call_args[1]["Item"]
+        assert call_args["question"] == "有給申請の方法は？"
+        assert call_args["answer"] == "社内ポータルから申請できます。"
+        assert "question_id" in call_args
+        assert "timestamp" in call_args
+
+    @patch("index._table")
+    def test_DynamoDB書き込みエラーは失敗メッセージを返す(self, mock_table):
+        mock_table.put_item.side_effect = ClientError(
+            {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": ""}},
+            "PutItem",
+        )
+        result = log_question("質問", "回答")
+        assert "失敗" in result

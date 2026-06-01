@@ -9,6 +9,11 @@ import uuid
 import boto3
 import streamlit as st
 
+# ── Bedrock Agent クライアント（キャッシュで再利用） ──────────
+@st.cache_resource
+def get_bedrock_agent_client(region: str):
+    return boto3.client("bedrock-agent-runtime", region_name=region)
+
 # ── ページ設定 ────────────────────────────────────────────────
 st.set_page_config(
     page_title="社内FAQ チャットボット",
@@ -65,7 +70,7 @@ for message in st.session_state.messages:
 # ── Bedrock Agent 呼び出し ────────────────────────────────────
 def invoke_bedrock_agent(question: str, session_id: str) -> str:
     """Bedrock Agent Runtime を通じて Agent を呼び出す"""
-    client = boto3.client("bedrock-agent-runtime", region_name=aws_region)
+    client = get_bedrock_agent_client(aws_region)
 
     response = client.invoke_agent(
         agentId=agent_id,
