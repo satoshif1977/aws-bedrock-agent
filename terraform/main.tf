@@ -198,6 +198,7 @@ resource "aws_dynamodb_table" "question_log" {
 
 # DynamoDB 書き込み権限（Lambda ロールに追加）
 resource "aws_iam_role_policy" "dynamodb" {
+  # checkov:skip=CKV_AWS_290: dynamodb:PutItem は特定テーブル ARN のみ許可・Checkov の誤検知
   name = "${var.project_name}-${var.environment}-dynamodb-policy"
   role = aws_iam_role.lambda.id
 
@@ -459,6 +460,7 @@ resource "aws_lambda_function_url" "main" {
 
 # ── Lambda Function URL への公開アクセス許可 ────────────────
 resource "aws_lambda_permission" "function_url_public" {
+  # checkov:skip=CKV_AWS_301: Slack Webhook 受付のため公開アクセスが必要（Lambda 内で署名検証実施）
   statement_id           = "AllowPublicAccess"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.main.function_name
