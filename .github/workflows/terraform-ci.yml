@@ -1,0 +1,75 @@
+name: Terraform CI
+
+# main / master ブランチへの push と PR 時に実行
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  id-token: write      # OIDC トークン取得（AWS 認証）
+  contents: read       # リポジトリ読み取り
+  pull-requests: write # PR へのコメント投稿
+
+jobs:
+  terraform:
+    name: Fmt / Validate
+    runs-on: ubuntu-latest
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      # ── 1. ソースコード取得 ────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # ── 2. Terraform セットアップ ─────────────────────────
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.9"
+
+      # ── 3. フォーマットチェック ────────────────────────────
+      - name: Terraform Format
+        run: terraform fmt --check -recursive
+
+      # ── 4. 初期化（バックエンドなし）─────────────────────
+      - name: Terraform Init
+        run: terraform init -backend=false
+
+      # ── 5. 構文・設定バリデーション ───────────────────────
+      - name: Terraform Validate
+        run: terraform validate
+
+  security:
+    name: Checkov セキュリティスキャン
+    runs-on: ubuntu-latest
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform
+          framework: terraform
+          soft_fail: false
+          # dev/PoC として意図的に省略するチェック
+          # CKV_AWS_117: Lambda VPC 配置不要（パブリック Lambda で十分）
+          # CKV_AWS_272: Lambda コード署名不要（dev/PoC）
+          # CKV_AWS_116: Lambda DLQ 不要（dev/PoC）
+          # CKV_AWS_115: Lambda 同時実行数制限不要（dev/PoC）
+          skip_check: >-
+            CKV_AWS_117,CKV_AWS_272,
+            CKV_AWS_116,CKV_AWS_115
+          output_format: cli

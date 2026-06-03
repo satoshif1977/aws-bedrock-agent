@@ -88,6 +88,7 @@ resource "aws_iam_role_policy" "ssm" {
 
 # ── CloudWatch Logs ────────────────────────────────────────
 resource "aws_cloudwatch_log_group" "lambda" {
+  # checkov:skip=CKV_AWS_158: dev/PoC 環境のため AWS 管理キーで十分（KMS CMK は本番のみ）
   name              = "/aws/lambda/${var.project_name}-${var.environment}"
   retention_in_days = var.log_retention_days
 
@@ -97,6 +98,11 @@ resource "aws_cloudwatch_log_group" "lambda" {
 
 # ── Lambda 関数 ────────────────────────────────────────────
 resource "aws_lambda_function" "main" {
+  # checkov:skip=CKV_AWS_116: dev/PoC のため DLQ は不要
+  # checkov:skip=CKV_AWS_117: dev/PoC のためパブリック Lambda で十分（VPC 配置不要）
+  # checkov:skip=CKV_AWS_272: dev/PoC のためコード署名は不要
+  # checkov:skip=CKV_AWS_115: dev/PoC のため同時実行数制限は不要
+  # checkov:skip=CKV_AWS_173: 環境変数は設定値のみで機密情報なし（Slack トークンは SSM 経由）
   function_name = "${var.project_name}-${var.environment}"
   description   = "社内FAQ自動応答 PoC - Bedrock + Slack 連携"
   role          = aws_iam_role.lambda.arn
@@ -135,7 +141,7 @@ resource "aws_lambda_function" "main" {
 
 # ── DynamoDB テーブル（FAQ データ） ────────────────────────
 resource "aws_dynamodb_table" "faq" {
-  #checkov:skip=CKV_AWS_28: dev/PoC 環境のため PITR 無効（本番では enabled = true に変更）
+  # checkov:skip=CKV_AWS_28: dev/PoC 環境のため PITR 無効（本番では enabled = true に変更）
   name         = "${var.project_name}-${var.environment}-faq"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "keyword"
@@ -147,6 +153,11 @@ resource "aws_dynamodb_table" "faq" {
 
   point_in_time_recovery {
     enabled = false # dev/PoC では不要
+  }
+
+  # AWS マネージドキーで保存データを暗号化（CKV_AWS_119 / 追加コストなし）
+  server_side_encryption {
+    enabled = true
   }
 
   deletion_protection_enabled = false # dev: スタック削除と同時に削除
@@ -168,6 +179,11 @@ resource "aws_dynamodb_table" "question_log" {
   }
 
   point_in_time_recovery {
+    enabled = true
+  }
+
+  # AWS マネージドキーで保存データを暗号化（CKV_AWS_119 / 追加コストなし）
+  server_side_encryption {
     enabled = true
   }
 
@@ -425,6 +441,7 @@ resource "aws_lambda_permission" "bedrock_agent" {
 
 # ── Lambda Function URL（Slack Webhook の受け口） ───────────
 resource "aws_lambda_function_url" "main" {
+  # checkov:skip=CKV_AWS_258: Slack Webhook 受付のため認証なしで公開（Lambda 内で署名検証実施）
   function_name      = aws_lambda_function.main.function_name
   authorization_type = "NONE" # Slack からの Webhook を受け付けるため公開
 
