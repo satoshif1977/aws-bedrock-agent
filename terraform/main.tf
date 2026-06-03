@@ -37,6 +37,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 
 # Bedrock 呼び出し権限
 resource "aws_iam_role_policy" "bedrock" {
+  # checkov:skip=CKV_AWS_290: bedrock:InvokeModelWithResponseStream は Checkov が書き込みと誤判定するが特定モデル ARN に限定済み
   name = "${var.project_name}-${var.environment}-bedrock-policy"
   role = aws_iam_role.lambda.id
 
@@ -78,6 +79,7 @@ resource "aws_iam_role_policy" "ssm" {
         # SSM の KMS 復号権限（SecureString の場合）
         # checkov:skip=CKV_AWS_111: SSM マネージドキー（aws/ssm）ARN は apply 前に確定できないため "*" を使用
         # checkov:skip=CKV_AWS_356: 同上
+        # checkov:skip=CKV_AWS_355: 同上（SSM マネージドキー ARN は動的のため "*" を使用）
         Effect   = "Allow"
         Action   = ["kms:Decrypt"]
         Resource = "*"

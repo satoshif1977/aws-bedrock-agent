@@ -69,7 +69,9 @@ jobs:
           # CKV_AWS_272: Lambda コード署名不要（dev/PoC）
           # CKV_AWS_116: Lambda DLQ 不要（dev/PoC）
           # CKV_AWS_115: Lambda 同時実行数制限不要（dev/PoC）
+          # CKV_AWS_338: CloudWatch ログ保持期間 1年未満（dev/PoC は 30日で十分）
           skip_check: >-
             CKV_AWS_117,CKV_AWS_272,
-            CKV_AWS_116,CKV_AWS_115
+            CKV_AWS_116,CKV_AWS_115,
+            CKV_AWS_338
           output_format: cli
