@@ -127,7 +127,12 @@ class TestLogQuestion:
     @patch("index._table")
     def test_DynamoDB書き込みエラーは失敗メッセージを返す(self, mock_table):
         mock_table.put_item.side_effect = ClientError(
-            {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": ""}},
+            {
+                "Error": {
+                    "Code": "ProvisionedThroughputExceededException",
+                    "Message": "",
+                }
+            },
             "PutItem",
         )
         result = log_question("質問", "回答")

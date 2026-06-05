@@ -15,6 +15,7 @@ import streamlit as st
 def get_bedrock_agent_client(region: str):
     return boto3.client("bedrock-agent-runtime", region_name=region)
 
+
 # ── ページ設定 ────────────────────────────────────────────────
 st.set_page_config(
     page_title="社内FAQ チャットボット",
