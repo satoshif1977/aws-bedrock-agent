@@ -4,7 +4,7 @@ aws-bedrock-agent Lambda ユニットテスト
 DynamoDB 呼び出しをモックし、AWS 接続なしでビジネスロジックを検証する。
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import index
 import pytest

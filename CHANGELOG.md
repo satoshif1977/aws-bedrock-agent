@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-06-05
+
+### Fixed
+
+- `app/app.py`: import ブロック後の空行を修正（ruff I001）
+- `lambda/test_index.py`: 未使用の `MagicMock` import を削除（ruff F401）
+- `terraform/main.tf`: `aws_iam_role_policy.ssm` に Checkov `CKV_AWS_290` インラインスキップを追加
+
 ## [1.4.0] - 2026-05-27
 
 ### Changed

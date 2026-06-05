@@ -9,6 +9,7 @@ import uuid
 import boto3
 import streamlit as st
 
+
 # ── Bedrock Agent クライアント（キャッシュで再利用） ──────────
 @st.cache_resource
 def get_bedrock_agent_client(region: str):

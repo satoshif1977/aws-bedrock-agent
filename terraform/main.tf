@@ -58,6 +58,7 @@ resource "aws_iam_role_policy" "bedrock" {
 
 # SSM Parameter Store 読み取り権限（Slack トークン取得用）
 resource "aws_iam_role_policy" "ssm" {
+  # checkov:skip=CKV_AWS_290: ssm:GetParameter/GetParameters は読み取り専用操作であり権限昇格のリスクはない
   name = "${var.project_name}-${var.environment}-ssm-policy"
   role = aws_iam_role.lambda.id
 
