@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-16
+
+### Changed
+- boto3 >=1.43.19 -> >=1.43.29
+- codecov/codecov-action v6 -> v7
+
 ## [1.5.0] - 2026-06-05
 
 ### Fixed
