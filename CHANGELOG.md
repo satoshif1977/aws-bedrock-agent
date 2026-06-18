@@ -4,11 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.6.0] - 2026-06-16
+## [1.8.0] - 2026-06-18
+
+### Added
+- README に Terraform CI バッジを追加
+
+## [1.7.0] - 2026-06-16
 
 ### Changed
 - boto3 >=1.43.19 -> >=1.43.29
 - codecov/codecov-action v6 -> v7
+
+## [1.6.0] - 2026-06-08
+
+### Added
+- `scripts/validate_agent.py`: Bedrock Agent 設定検証スクリプト（Python）
+  - エージェント status（PREPARED / VERSIONED）確認・Action Groups 有効状態一覧・エイリアス登録状況を確認
+  - 全チェック結果を PASS / FAIL で総合判定
+  - 実行: `AGENT_ID=xxx python scripts/validate_agent.py`
+
+### Fixed
+- `app/app.py`・`lambda/test_index.py`: black フォーマット適用（コードスタイル統一）
 
 ## [1.5.0] - 2026-06-05
 
