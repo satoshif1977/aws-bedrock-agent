@@ -1,0 +1,27 @@
+name: Go Test
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "lambda_go/**"
+  pull_request:
+    paths:
+      - "lambda_go/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache-dependency-path: lambda_go/go.sum
+
+      - name: Run tests
+        working-directory: lambda_go
+        run: go test -v -run "TestGetEnv|TestBuildResponse|TestRouteFunction|TestActionGroupEvent" ./...
