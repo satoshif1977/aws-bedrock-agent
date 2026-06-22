@@ -25,7 +25,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: client_ts
-        run: npm install
+        run: npm ci
 
       - name: TypeScript type check
         working-directory: client_ts

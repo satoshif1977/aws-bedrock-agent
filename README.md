@@ -176,6 +176,10 @@ aws-bedrock-agent/
 │   └── terraform.tfvars.example
 ├── scripts/
 │   └── seed_faq.py         # FAQ 初期データ投入スクリプト（terraform apply 後に1回実行）
+├── client_ts/               # TypeScript クライアント（Python app.py の型安全版）
+│   ├── types.ts             # 型定義（BedrockAgentConfig / ActionGroupEvent 等）
+│   ├── client.ts            # ユーティリティ関数（validateConfig / extractAnswer 等）
+│   └── client.test.ts       # Jest ユニットテスト（38 件）
 ├── docs/
 │   ├── architecture.drawio
 │   └── screenshots/
@@ -415,11 +419,13 @@ GitHub Actions で Python リント（flake8）と Terraform の静的解析（C
 
 ### 実施内容
 
-| ジョブ | 内容 |
-|---|---|
-| Python lint（flake8） | コードスタイル・構文エラーの検出 |
-| terraform fmt / validate | フォーマット・構文チェック |
-| Checkov セキュリティスキャン | IaC のセキュリティポリシー違反を検出（soft_fail: false） |
+| ジョブ | ワークフロー | 内容 |
+|---|---|---|
+| Python lint（flake8） | python-lint.yml | コードスタイル・構文エラーの検出 |
+| terraform fmt / validate | terraform-ci.yml | フォーマット・構文チェック |
+| Checkov セキュリティスキャン | terraform-ci.yml | IaC のセキュリティポリシー違反を検出（soft_fail: false） |
+| Go ユニットテスト | go-test.yml | getEnv・buildResponse・routeFunction 等 12 件（AWS 接続不要） |
+| TypeScript 型チェック + Jest | ts-test.yml | tsc --noEmit + 38 件のユニットテスト（AWS 接続不要） |
 
 ### セキュリティ対応（Terraform で修正した内容）
 
