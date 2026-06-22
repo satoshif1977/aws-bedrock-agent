@@ -21,3 +21,7 @@ docx_extracted/
 # Python cache
 .ruff_cache/
 .pytest_cache/
+
+# Node.js
+node_modules/
+dist/
