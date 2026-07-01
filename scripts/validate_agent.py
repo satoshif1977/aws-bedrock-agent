@@ -33,6 +33,7 @@ client = boto3.client("bedrock-agent", region_name=REGION)
 
 # ── ヘルパー関数 ──────────────────────────────────────────────
 
+
 def check_agent_status(agent_id: str) -> dict:
     """エージェントの基本情報と状態を取得する。"""
     response = client.get_agent(agentId=agent_id)
@@ -104,7 +105,9 @@ def validate(agent_id: str) -> bool:
         if status in ("PREPARED", "VERSIONED"):
             print(f"\n  [OK] ステータス: {status}")
         else:
-            print(f"\n  [WARN] ステータスが PREPARED / VERSIONED ではありません: {status}")
+            print(
+                f"\n  [WARN] ステータスが PREPARED / VERSIONED ではありません: {status}"
+            )
             ok = False
     except ClientError as e:
         print(f"  [ERROR] エージェント取得失敗: {e}")
@@ -153,6 +156,7 @@ def validate(agent_id: str) -> bool:
 
 
 # ── エントリーポイント ────────────────────────────────────────
+
 
 def main() -> None:
     if not AGENT_ID:
