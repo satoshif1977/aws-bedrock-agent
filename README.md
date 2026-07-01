@@ -167,7 +167,13 @@ aws-bedrock-agent/
 │   ├── app.py              # Streamlit Web UI（Bedrock Agent Runtime 呼び出し）
 │   └── requirements.txt
 ├── lambda/
-│   └── index.py            # Action Group ハンドラー（FAQ検索 + DynamoDB記録）
+│   ├── index.py            # Action Group ハンドラー（FAQ検索 + DynamoDB記録）
+│   └── test_index.py       # pytest ユニットテスト（11 件・AWS 接続不要）
+├── lambda_go/              # Go 版 Action Group ハンドラー（型安全・高速起動）
+│   ├── main.go
+│   ├── main_test.go        # Go ユニットテスト（12 件・AWS 接続不要）
+│   ├── go.mod
+│   └── go.sum
 ├── terraform/
 │   ├── main.tf             # Bedrock Agent / Action Groups / Lambda / DynamoDB / IAM
 │   ├── variables.tf
@@ -393,6 +399,33 @@ aws-vault exec personal-dev-source -- streamlit run app.py
 # http://localhost:8501 でアクセス
 ```
 
+### Python ユニットテスト（Lambda）
+
+```bash
+# AWS 接続不要・ローカルで実行
+cd lambda
+pip install pytest boto3
+pytest test_index.py -v
+# 11 件：search_faq / route_function / handler を DynamoDB モックで検証
+```
+
+### Go ユニットテスト（lambda_go）
+
+```bash
+cd lambda_go
+go test -v ./...
+# 12 件：getEnv / buildResponse / routeFunction / ActionGroupEvent
+```
+
+### TypeScript テスト（client_ts）
+
+```bash
+cd client_ts
+npm ci
+npm test
+# 38 件：validateConfig / extractAnswer / buildPayload 等
+```
+
 ### Lambda 関数の単体テスト（CLI）
 
 ```bash
@@ -421,7 +454,7 @@ GitHub Actions で Python リント（flake8）と Terraform の静的解析（C
 
 | ジョブ | ワークフロー | 内容 |
 |---|---|---|
-| Python lint（flake8） | python-lint.yml | コードスタイル・構文エラーの検出 |
+| Python lint + pytest | python-lint.yml | ruff / black チェック + Lambda ユニットテスト 11 件（AWS 接続不要） |
 | terraform fmt / validate | terraform-ci.yml | フォーマット・構文チェック |
 | Checkov セキュリティスキャン | terraform-ci.yml | IaC のセキュリティポリシー違反を検出（soft_fail: false） |
 | Go ユニットテスト | go-test.yml | getEnv・buildResponse・routeFunction 等 12 件（AWS 接続不要） |
