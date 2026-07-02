@@ -2,10 +2,11 @@ name: Go Test
 
 on:
   push:
-    branches: [main, master]
+    branches: [master]
     paths:
       - "lambda_go/**"
   pull_request:
+    branches: [master]
     paths:
       - "lambda_go/**"
 
