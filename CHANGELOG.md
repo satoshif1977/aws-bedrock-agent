@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-10
+
+### Added
+- `lambda_go/` Go ユニットテスト 13 件 → 24 件に拡充（詳細ケース追加）
+- `scripts/test_seed_faq.py`: pytest 14 件追加（seed_faq スクリプト検証）
+- `scripts/test_validate_agent.py`: pytest 17 件追加（validate_agent スクリプト検証）
+- `pytest.ini`: `testpaths = lambda scripts` を設定（CI テスト収集範囲を明示）
+
+### Fixed
+- `scripts/validate_agent.py`: black フォーマット適用
+
+### Changed
+- CI: 全ワークフローの `branches` を `[master]` に統一・Node.js 20 → 22
+- Dependabot: `boto3` / `actions/setup-node` v4 → v6 更新
+
 ## [1.8.0] - 2026-06-18
 
 ### Added
