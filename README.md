@@ -4,6 +4,7 @@
 ![Terraform CI](https://github.com/satoshif1977/aws-bedrock-agent/actions/workflows/terraform-ci.yml/badge.svg)
 ![Go Test](https://github.com/satoshif1977/aws-bedrock-agent/actions/workflows/go-test.yml/badge.svg)
 ![TS Test](https://github.com/satoshif1977/aws-bedrock-agent/actions/workflows/ts-test.yml/badge.svg)
+[![codecov](https://codecov.io/gh/satoshif1977/aws-bedrock-agent/graph/badge.svg)](https://codecov.io/gh/satoshif1977/aws-bedrock-agent)
 ![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
