@@ -25,3 +25,11 @@ docx_extracted/
 # Node.js
 node_modules/
 dist/
+
+# Go ビルド成果物
+lambda_go/aws-bedrock-agent
+lambda_go/aws-bedrock-agent.exe
+lambda_go/bootstrap
+
+# テストカバレッジ
+coverage/

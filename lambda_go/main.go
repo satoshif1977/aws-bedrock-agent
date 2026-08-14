@@ -33,8 +33,14 @@ var (
 	faqTableName    = getEnv("FAQ_TABLE", "bedrock-agent-dev-faq")
 )
 
+// ── DynamoDB クライアントインターフェース（テスト時にモックに差し替え可能） ──
+type DynamoDBClient interface {
+	Scan(ctx context.Context, params *dynamodb.ScanInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ScanOutput, error)
+	PutItem(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+}
+
 // ── DynamoDB クライアント（init で初期化・コンテナ再利用時に再生成しない） ──
-var dynamoClient *dynamodb.Client
+var dynamoClient DynamoDBClient
 
 func init() {
 	cfg, err := config.LoadDefaultConfig(context.Background())
