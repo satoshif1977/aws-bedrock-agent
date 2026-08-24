@@ -178,4 +178,174 @@ describe("formatFAQKeywords (境界値詳細)", () => {
     ]);
     expect(result).not.toContain("\n");
   });
+
+  test("2 件のキーワードで改行が 1 つ含まれる", () => {
+    const result = formatFAQKeywords([
+      { keyword: "有給", description: "申請方法" },
+      { keyword: "経費", description: "精算方法" },
+    ]);
+    expect(result.split("\n")).toHaveLength(2);
+  });
+
+  test("各行が '- **' で始まるマークダウン形式", () => {
+    const result = formatFAQKeywords(DEFAULT_FAQ_KEYWORDS);
+    for (const line of result.split("\n")) {
+      expect(line).toMatch(/^- \*\*/);
+    }
+  });
+});
+
+// ── extractParams 詳細 ──────────────────────────────────────────
+
+describe("extractParams (詳細)", () => {
+  test("パラメータが 3 件のとき 3 つのキーが返る", () => {
+    const event: ActionGroupEvent = {
+      actionGroup: "TestGroup",
+      function: "testFunc",
+      messageVersion: "1.0",
+      parameters: [
+        { name: "a", value: "1" },
+        { name: "b", value: "2" },
+        { name: "c", value: "3" },
+      ],
+    };
+    const params = extractParams(event);
+    expect(Object.keys(params)).toHaveLength(3);
+    expect(params.a).toBe("1");
+    expect(params.c).toBe("3");
+  });
+
+  test("parameters が undefined のとき空オブジェクトを返す", () => {
+    const event: ActionGroupEvent = {
+      actionGroup: "TestGroup",
+      function: "testFunc",
+      messageVersion: "1.0",
+    };
+    expect(extractParams(event)).toEqual({});
+  });
+
+  test("同名パラメータは後の値で上書きされる", () => {
+    const event: ActionGroupEvent = {
+      actionGroup: "TestGroup",
+      function: "testFunc",
+      messageVersion: "1.0",
+      parameters: [
+        { name: "key", value: "first" },
+        { name: "key", value: "second" },
+      ],
+    };
+    expect(extractParams(event).key).toBe("second");
+  });
+});
+
+// ── buildActionGroupResponse 詳細 ──────────────────────────────
+
+describe("buildActionGroupResponse (詳細)", () => {
+  const event: ActionGroupEvent = {
+    actionGroup: "HRGroup",
+    function: "getLeaveBalance",
+    messageVersion: "1.0",
+    parameters: [{ name: "employeeId", value: "E001" }],
+  };
+
+  test("response.actionGroup がイベントと一致する", () => {
+    const resp = buildActionGroupResponse(event, "残り5日");
+    expect(resp.response.actionGroup).toBe("HRGroup");
+  });
+
+  test("response.function がイベントと一致する", () => {
+    const resp = buildActionGroupResponse(event, "残り5日");
+    expect(resp.response.function).toBe("getLeaveBalance");
+  });
+
+  test("messageVersion がイベントと一致する", () => {
+    const resp = buildActionGroupResponse(event, "残り5日");
+    expect(resp.messageVersion).toBe("1.0");
+  });
+
+  test("body に日本語テキストが正しく設定される", () => {
+    const resp = buildActionGroupResponse(event, "有給残り5日です");
+    expect(resp.response.functionResponse.responseBody.TEXT.body).toBe(
+      "有給残り5日です"
+    );
+  });
+
+  test("空の body でもレスポンスが構築される", () => {
+    const resp = buildActionGroupResponse(event, "");
+    expect(resp.response.functionResponse.responseBody.TEXT.body).toBe("");
+  });
+});
+
+// ── isValidSessionId 詳細 ───────────────────────────────────────
+
+describe("isValidSessionId (詳細)", () => {
+  test("UUID v4 以外のバージョン（v1）は false", () => {
+    // UUID v1 はバージョンビットが '1'
+    expect(isValidSessionId("550e8400-e29b-11d4-a716-446655440000")).toBe(false);
+  });
+
+  test("ハイフンなし UUID は false", () => {
+    expect(isValidSessionId("550e8400e29b41d4a716446655440000")).toBe(false);
+  });
+
+  test("空文字は false", () => {
+    expect(isValidSessionId("")).toBe(false);
+  });
+
+  test("大文字 UUID v4 も有効", () => {
+    expect(isValidSessionId("550E8400-E29B-41D4-A716-446655440000")).toBe(true);
+  });
+});
+
+// ── validateConfig + isValidConfig 追加 ─────────────────────────
+
+describe("validateConfig + isValidConfig (追加)", () => {
+  test("空白のみの agentId はエラー", () => {
+    const errors = validateConfig({
+      agentId: "   ",
+      agentAliasId: "ALIAS",
+      region: "us-east-1",
+    });
+    expect(errors).toContain("agentId is required");
+  });
+
+  test("全フィールド有効のとき isValidConfig が true", () => {
+    expect(
+      isValidConfig({
+        agentId: "AGT",
+        agentAliasId: "ALS",
+        region: "ap-northeast-1",
+      })
+    ).toBe(true);
+  });
+
+  test("region のみ空のとき 1 件エラー", () => {
+    const errors = validateConfig({
+      agentId: "AGT",
+      agentAliasId: "ALS",
+      region: "",
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("region");
+  });
+});
+
+// ── extractAnswer 追加 ──────────────────────────────────────────
+
+describe("extractAnswer (追加)", () => {
+  test("chunk が undefined のイベントはスキップされる", () => {
+    const events: CompletionEvent[] = [
+      { chunk: undefined },
+      { chunk: { bytes: Buffer.from("有効") } },
+    ];
+    expect(extractAnswer(events)).toBe("有効");
+  });
+
+  test("Uint8Array でも正しくデコードされる", () => {
+    const text = "Uint8Arrayテスト";
+    const events: CompletionEvent[] = [
+      { chunk: { bytes: new Uint8Array(Buffer.from(text)) } },
+    ];
+    expect(extractAnswer(events)).toBe(text);
+  });
 });
