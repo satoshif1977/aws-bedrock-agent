@@ -42,6 +42,10 @@ type DynamoDBClient interface {
 // ── DynamoDB クライアント（init で初期化・コンテナ再利用時に再生成しない） ──
 var dynamoClient DynamoDBClient
 
+// リトライ実行器。DynamoDB のスロットリングと一時的なサーバエラーに備える。
+// テストからは Sleep / Rand を差し替えて実待機ゼロで検証する。
+var retrier = NewRetrier()
+
 func init() {
 	cfg, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
@@ -128,8 +132,10 @@ func loadFAQ(ctx context.Context) (map[string]string, error) {
 		return faqCache, nil
 	}
 
-	out, err := dynamoClient.Scan(ctx, &dynamodb.ScanInput{
-		TableName: aws.String(faqTableName),
+	out, err := RetryValue(ctx, retrier, "Scan", func(c context.Context) (*dynamodb.ScanOutput, error) {
+		return dynamoClient.Scan(c, &dynamodb.ScanInput{
+			TableName: aws.String(faqTableName),
+		})
 	})
 	if err != nil {
 		return nil, fmt.Errorf("FAQ テーブルスキャンエラー: %w", err)
@@ -185,9 +191,12 @@ func logQuestion(ctx context.Context, question, answer string) string {
 		return "記録に失敗しました。"
 	}
 
-	_, err = dynamoClient.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(dynamoTableName),
-		Item:      av,
+	err = retrier.Do(ctx, "PutItem", func(c context.Context) error {
+		_, putErr := dynamoClient.PutItem(c, &dynamodb.PutItemInput{
+			TableName: aws.String(dynamoTableName),
+			Item:      av,
+		})
+		return putErr
 	})
 	if err != nil {
 		log.Printf("DynamoDB 書き込みエラー: %v", err)
