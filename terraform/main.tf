@@ -8,10 +8,28 @@
 # ──────────────────────────────────────────────────────────
 
 # ── Lambda デプロイパッケージ ──────────────────────────────
+locals {
+  # Lambda に同梱するファイル（許可リスト方式）
+  #
+  # source_dir でディレクトリごと固めると、test_*.py / __pycache__ /
+  # .pytest_cache / .ruff_cache まで丸ごとデプロイパッケージに入ってしまう。
+  # 実際に生成された lambda.zip にはテストコードとキャッシュが同梱されていた。
+  # 実行に必要なファイルだけを明示的に列挙し、列挙漏れは
+  # 実行時 ImportError として即座に表面化させる（黙って混入する事故を防ぐ）。
+  lambda_source_files = ["index.py", "retry.py"]
+}
+
 data "archive_file" "lambda" {
   type        = "zip"
-  source_dir  = "${path.module}/../lambda"
   output_path = "${path.module}/../lambda.zip"
+
+  dynamic "source" {
+    for_each = local.lambda_source_files
+    content {
+      content  = file("${path.module}/../lambda/${source.value}")
+      filename = source.value
+    }
+  }
 }
 
 # ── IAM ロール ─────────────────────────────────────────────

@@ -8,12 +8,14 @@ Action Groups:
 
 import logging
 import os
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
+from retry import RetryConfig, retry_call
 
 # ── ロガー設定 ─────────────────────────────────────────────
 logger = logging.getLogger()
@@ -30,6 +32,23 @@ _dynamodb = boto3.resource("dynamodb", region_name=REGION)
 _table = _dynamodb.Table(DYNAMODB_TABLE)
 _faq_table = _dynamodb.Table(FAQ_TABLE)
 
+# ── リトライ設定 ──────────────────────────────────────────
+# DynamoDB のスロットリング・一時的なサーバエラーに対する再試行設定。
+# 指数バックオフ + フルジッターで最大3回まで試行する。
+# テストからは RETRY_SLEEP を差し替えることで実待機なしに検証できる。
+RETRY_CONFIG = RetryConfig(max_attempts=3, base_delay=0.2, max_delay=2.0)
+RETRY_SLEEP = time.sleep
+
+
+def call_aws(func, *args, **kwargs):
+    """AWS API 呼び出しを共通のリトライ設定で実行する。
+
+    リトライ不能なエラーと、試行回数を使い切った場合の失敗は、
+    元の例外をそのまま送出する（呼び出し側の except ClientError を変えないため）。
+    """
+    return retry_call(func, *args, config=RETRY_CONFIG, sleep=RETRY_SLEEP, **kwargs)
+
+
 # ── FAQ キャッシュ（ウォームスタート時は DynamoDB を省略） ──
 _FAQ_CACHE: dict[str, str] | None = None
 
@@ -40,7 +59,7 @@ def _load_faq() -> dict[str, str]:
     if _FAQ_CACHE is not None:
         return _FAQ_CACHE
     try:
-        response = _faq_table.scan()
+        response = call_aws(_faq_table.scan)
         _FAQ_CACHE = {
             item["keyword"]: item["answer"] for item in response.get("Items", [])
         }
@@ -77,7 +96,7 @@ def log_question(question: str, answer: str) -> str:
     }
 
     try:
-        _table.put_item(Item=item)
+        call_aws(_table.put_item, Item=item)
         logger.info(f"DynamoDB 記録完了: question_id={item['question_id']}")
         return f"記録しました（ID: {item['question_id']}）"
     except ClientError as e:
