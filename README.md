@@ -155,6 +155,30 @@ LLM が「どのツールを使うか」を自律的に判断します。固定�
 ### Lambda 内での原子的処理
 FAQ 検索と同時に DynamoDB への記録も Lambda 内で完結させる設計にしています。小さいモデル（Claude 3 Haiku）では複数ツールの連続呼び出しが不安定なケースがあるため、**信頼性を優先して Lambda 側で処理を完結**させています。
 
+### 共有ユーティリティの3言語並置
+AWS 呼び出しの運用品質を揃えるため、**リトライ・構造化ロギング・メトリクス**の3点セットを
+Python / Go / TypeScript の**3言語で同じ設計・同じ出力キー**で実装しています。
+
+| 関心事 | Python | Go | TypeScript |
+|---|---|---|---|
+| リトライ（指数バックオフ + ジッター） | `lambda/retry.py` | `lambda_go/retry.go` | — |
+| 構造化ロギング（機密情報マスキング） | `lambda/logger.py` | `lambda_go/logger.go` | `client_ts/logger.ts` |
+| **CloudWatch EMF メトリクス** | `lambda/metrics.py` | `lambda_go/metrics.go` | — |
+
+**出力キーを揃える**ことで、CloudWatch Logs Insights のクエリを言語をまたいで共通化できます。
+
+メトリクスは `PutMetricData` API を呼ばず、**標準出力に1行の JSON を書くだけ**の
+EMF（Embedded Metric Format）方式です。API のレイテンシが処理時間に乗らず、
+スロットリングの影響も受けず、追加の IAM 権限も要りません。
+
+3層はコールバックで結線できます（シグネチャを揃えてあります）。
+
+```go
+// リトライ発生を「ログ」と「メトリクス」の両方に流す
+RetryLogHook(logger, "PutItem")      // logger.go
+RetryMetricsHook(metrics, "PutItem") // metrics.go — 同じシグネチャ
+```
+
 ### IaC による再現性
 Bedrock Agent・Action Groups・DynamoDB・Lambda・IAM をすべて Terraform で管理。コマンド一発で同じ環境を再現できます。
 
@@ -165,28 +189,38 @@ Bedrock Agent・Action Groups・DynamoDB・Lambda・IAM をすべて Terraform �
 ```
 aws-bedrock-agent/
 ├── app/
-│   ├── app.py              # Streamlit Web UI（Bedrock Agent Runtime 呼び出し）
+│   ├── app.py               # Streamlit Web UI（Bedrock Agent Runtime 呼び出し）
 │   └── requirements.txt
-├── lambda/
-│   ├── index.py            # Action Group ハンドラー（FAQ検索 + DynamoDB記録）
-│   └── test_index.py       # pytest ユニットテスト（11 件・AWS 接続不要）
-├── lambda_go/              # Go 版 Action Group ハンドラー（型安全・高速起動）
+├── lambda/                  # Python 版 Action Group ハンドラー
+│   ├── index.py             # FAQ検索 + DynamoDB記録
+│   ├── logger.py            # 構造化ロガー（機密情報マスキング付き）
+│   ├── retry.py             # リトライ（指数バックオフ + ジッター）
+│   ├── metrics.py           # CloudWatch EMF メトリクス
+│   └── test_*.py            # pytest（AWS 接続不要）
+├── lambda_go/               # Go 版 Action Group ハンドラー（型安全・高速起動）
 │   ├── main.go
-│   ├── main_test.go        # Go ユニットテスト（12 件・AWS 接続不要）
+│   ├── logger.go            # 構造化ロガー（log/slog ベース）
+│   ├── retry.go             # リトライ
+│   ├── metrics.go           # CloudWatch EMF メトリクス
+│   ├── *_test.go            # go test（Fuzz・Benchmark 含む）
 │   ├── go.mod
 │   └── go.sum
+├── client_ts/               # TypeScript クライアント（app.py の型安全版）
+│   ├── types.ts             # 型定義（BedrockAgentConfig / ActionGroupEvent 等）
+│   ├── client.ts            # ユーティリティ関数（validateConfig / extractAnswer 等）
+│   ├── helpers.ts           # 共通ヘルパー
+│   ├── logger.ts            # 構造化ロガー
+│   └── *.test.ts            # Jest
 ├── terraform/
-│   ├── main.tf             # Bedrock Agent / Action Groups / Lambda / DynamoDB / IAM
+│   ├── main.tf              # Bedrock Agent / Action Groups / Lambda / DynamoDB / IAM
 │   ├── variables.tf
 │   ├── outputs.tf
 │   ├── provider.tf
 │   └── terraform.tfvars.example
 ├── scripts/
-│   └── seed_faq.py         # FAQ 初期データ投入スクリプト（terraform apply 後に1回実行）
-├── client_ts/               # TypeScript クライアント（Python app.py の型安全版）
-│   ├── types.ts             # 型定義（BedrockAgentConfig / ActionGroupEvent 等）
-│   ├── client.ts            # ユーティリティ関数（validateConfig / extractAnswer 等）
-│   └── client.test.ts       # Jest ユニットテスト（38 件）
+│   ├── seed_faq.py          # FAQ 初期データ投入（terraform apply 後に1回実行）
+│   ├── invoke_agent.py      # Agent 呼び出し
+│   └── validate_agent.py    # デプロイ後の疎通確認
 ├── docs/
 │   ├── architecture.drawio
 │   └── screenshots/
@@ -406,8 +440,9 @@ aws-vault exec personal-dev-source -- streamlit run app.py
 # AWS 接続不要・ローカルで実行
 cd lambda
 pip install pytest boto3
-pytest test_index.py -v
-# 11 件：search_faq / route_function / handler を DynamoDB モックで検証
+pytest -v
+# 418 件：FAQ検索・ルーティング・リトライ・ロガー・メトリクスを
+#         DynamoDB モックで検証（lambda/ と scripts/ の合計）
 ```
 
 ### Go ユニットテスト（lambda_go）
@@ -415,7 +450,8 @@ pytest test_index.py -v
 ```bash
 cd lambda_go
 go test -v ./...
-# 12 件：getEnv / buildResponse / routeFunction / ActionGroupEvent
+# 204 件：getEnv / buildResponse / routeFunction / リトライ / ロガー / メトリクス
+#          （Fuzz テスト・ベンチマークを含む）
 ```
 
 ### TypeScript テスト（client_ts）
@@ -424,7 +460,7 @@ go test -v ./...
 cd client_ts
 npm ci
 npm test
-# 38 件：validateConfig / extractAnswer / buildPayload 等
+# 183 件：validateConfig / extractAnswer / buildPayload / ロガー / ヘルパー
 ```
 
 ### Lambda 関数の単体テスト（CLI）
@@ -455,11 +491,11 @@ GitHub Actions で Python リント（flake8）と Terraform の静的解析（C
 
 | ジョブ | ワークフロー | 内容 |
 |---|---|---|
-| Python lint + pytest | python-lint.yml | ruff / black チェック + Lambda ユニットテスト 11 件（AWS 接続不要） |
+| Python lint + pytest | python-lint.yml | ruff / black チェック + ユニットテスト 418 件（AWS 接続不要） |
 | terraform fmt / validate | terraform-ci.yml | フォーマット・構文チェック |
 | Checkov セキュリティスキャン | terraform-ci.yml | IaC のセキュリティポリシー違反を検出（soft_fail: false） |
-| Go ユニットテスト | go-test.yml | getEnv・buildResponse・routeFunction 等 12 件（AWS 接続不要） |
-| TypeScript 型チェック + Jest | ts-test.yml | tsc --noEmit + 38 件のユニットテスト（AWS 接続不要） |
+| Go ユニットテスト | go-test.yml | getEnv・buildResponse・リトライ・ロガー・メトリクス等 204 件（go vet / -race 込み・AWS 接続不要） |
+| TypeScript 型チェック + Jest | ts-test.yml | tsc --noEmit + 183 件のユニットテスト（AWS 接続不要） |
 
 ### セキュリティ対応（Terraform で修正した内容）
 
