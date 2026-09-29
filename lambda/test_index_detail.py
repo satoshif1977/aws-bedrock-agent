@@ -158,7 +158,8 @@ class TestRouteFunctionDetail:
     @patch("index.search_faq", return_value="FAQ回答")
     def test_valueが省略された場合は空文字がデフォルト(self, mock_search):
         route_function("search-faq", [{"name": "question"}])
-        mock_search.assert_called_once_with("")
+        mock_search.assert_called_once()
+        assert mock_search.call_args.args == ("",)
 
     @patch("index.log_question", return_value="記録")
     def test_log_questionでquestionとanswerが正しく渡される(self, mock_log):
@@ -167,7 +168,8 @@ class TestRouteFunctionDetail:
             {"name": "answer", "value": "A"},
         ]
         route_function("log-question", params)
-        mock_log.assert_called_once_with("Q", "A")
+        mock_log.assert_called_once()
+        assert mock_log.call_args.args == ("Q", "A")
 
     def test_未知functionは関数名を含むエラーメッセージを返す(self):
         result = route_function("nonexistent-function", [])
@@ -199,7 +201,8 @@ class TestHandlerDetail:
             "parameters": params,
         }
         handler(event, None)
-        mock_route.assert_called_once_with("search-faq", params)
+        mock_route.assert_called_once()
+        assert mock_route.call_args.args == ("search-faq", params)
 
     @patch("index.route_function", return_value="回答")
     def test_レスポンスのfunctionが入力と一致する(self, mock_route):
