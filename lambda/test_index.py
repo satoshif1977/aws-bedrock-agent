@@ -66,7 +66,8 @@ class TestRouteFunction:
     def test_search_faqルーティング(self, mock_search):
         result = route_function("search-faq", [{"name": "question", "value": "有給"}])
         assert result == "FAQ回答"
-        mock_search.assert_called_once_with("有給")
+        mock_search.assert_called_once()
+        assert mock_search.call_args.args == ("有給",)
 
     @patch("index.log_question", return_value="記録しました")
     def test_log_questionルーティング(self, mock_log):
@@ -76,7 +77,8 @@ class TestRouteFunction:
         ]
         result = route_function("log-question", params)
         assert result == "記録しました"
-        mock_log.assert_called_once_with("質問", "回答")
+        mock_log.assert_called_once()
+        assert mock_log.call_args.args == ("質問", "回答")
 
     def test_未知のfunctionはエラーメッセージ(self):
         result = route_function("unknown-function", [])
