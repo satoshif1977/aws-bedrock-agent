@@ -33,3 +33,6 @@ lambda_go/bootstrap
 
 # テストカバレッジ
 coverage/
+# go test -coverprofile / CI が生成する
+coverage.out
+*.cover.out
